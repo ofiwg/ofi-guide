@@ -28,7 +28,7 @@ tagline: Libfabric Programmer's Guide
 ## Call setup costs
 ## Branches and loops
 ## Command formatting
-##  Memory footprint
+## Memory footprint
 ### Addressing
 ### Communication resources
 ### Network Buffering
