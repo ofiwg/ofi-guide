@@ -8,10 +8,11 @@ tagline: Libfabric Programmer's Guide
 
 # Introduction
 # Review of Sockets Communication
-## Connected (TCP) communication
-## Connectionless (UDP) communication
+## Connected (TCP) Communication
+## Connectionless (UDP) Communication
 ## Advantages
 ## Disadvantages
+
 # High-Performance Networking
 ## Avoiding memory copies
 ### Network buffers
@@ -22,6 +23,7 @@ tagline: Libfabric Programmer's Guide
 ## Direct hardware access
 ### Kernel bypass
 ### Direct data placement
+
 # Designing Interfaces for Performance
 ## Call setup costs
 ## Branches and loops
@@ -41,6 +43,7 @@ tagline: Libfabric Programmer's Guide
 ### Message
 ### Completion
 ### Data
+
 # OFI Architecture
 # Framework versus Provider
 # Control services
