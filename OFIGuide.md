@@ -17,6 +17,9 @@ The goal of OFI, and libfabric specifically, is to define interfaces that enable
 This guide describes the libfabric architecture and interfaces.  It provides insight into the motivation for its design, and aims to instruct developers on how the features of libfabric may best be employed.
 
 # Review of Sockets Communication
+
+The sockets API is a widely used networking API.  This guide assumes that a reader has a working knowledge of programming to sockets.  It makes reference to socket based communications throughout, in an effort to help explain libfabric concepts and how they relate or differ from the socket API.
+
 ## Connected (TCP) Communication
 ## Connectionless (UDP) Communication
 ## Advantages
