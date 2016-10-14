@@ -18,9 +18,33 @@ This guide describes the libfabric architecture and interfaces.  It provides ins
 
 # Review of Sockets Communication
 
-The sockets API is a widely used networking API.  This guide assumes that a reader has a working knowledge of programming to sockets.  It makes reference to socket based communications throughout, in an effort to help explain libfabric concepts and how they relate or differ from the socket API.
+The sockets API is a widely used networking API.  This guide assumes that a reader has a working knowledge of programming to sockets.  It makes reference to socket based communications throughout, in an effort to help explain libfabric concepts and how they relate or differ from the socket API.  The following sections provide a high-level overview of socket semantics for reference.
 
 ## Connected (TCP) Communication
+
+The most widely used type of socket is SOCK_STREAM.  This sort of socket usually runs over the TCP/IP protocol, and as a result is often referred to as a 'TCP' socket.  TCP sockets are connection-oriented, requiring an explicit connection setup before data transfers can occur.  A TCP socket can only transfer data to a single peer socket.
+
+Applications using TCP sockets are typically labeled as either a client or server.  Server applications listen for connection request, and accept them when they occur.  Clients, on the other hand, initiate connections to the server.  After a connection has been established, data transfers between a client and server are similar.  The following code segments highlight the general flow for a sample client and serve, with error handling omitted for brevity.
+
+```
+/* Example server code flow to initiate listen */
+struct addrinfo *ai, hints;
+int listen_fd;
+
+hints.ai_socktype = SOCK_STREAM;
+hints.ai_flags = AI_PASSIVE;
+getaddrinfo(NULL, "7471", &hints, &ai);
+
+listen_fd = socket(ai->ai_family, SOCK_STREAM, 0);
+bind(listen_fd, ai->ai_addr, ai->ai_addrlen);
+freeaddrinfo(ai);
+
+fcntl(listen_fd, F_SETFL, O_NONBLOCK);
+listen(listen_fd, 128);
+```
+
+In this example, the server will listen for connection requests on port 7471 across all addresses in the system.  The call to getaddrinfo() is used to form the local socket address.  The node parameter is set to NULL, indicating that the IP address should be a wildcard.  The port is hard-coded to 7471.  The AI_PASSIVE flag signifies that the address will be used by the listening side of the connection.
+
 ## Connectionless (UDP) Communication
 ## Advantages
 ## Disadvantages
