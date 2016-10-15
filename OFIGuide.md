@@ -53,16 +53,16 @@ In practice, most enterprise-level applications make use of non-blocking sockets
 ```
 /* Example client code flow to start connection */
 struct addrinfo *ai, hints;
-int fd;
+int client_fd;
 
 memset(&hints, 0, sizeof hints);
 hints.ai_socktype = SOCK_STREAM;
 getaddrinfo("10.31.20.04", "7471", &hints, &ai);
 
-fd = socket(ai->ai_family, SOCK_STREAM, 0);
-fcntl(fd, F_SETFL, O_NONBLOCK);
+client_fd = socket(ai->ai_family, SOCK_STREAM, 0);
+fcntl(client_fd, F_SETFL, O_NONBLOCK);
 
-connect(fd, ai->ai_addr, ai->ai_addrlen);
+connect(client_fd, ai->ai_addr, ai->ai_addrlen);
 freeaddrinfo(ai);
 ```
 
@@ -72,7 +72,23 @@ Whether the client is given the server's network address directly or a name whic
 
 Using the getaddrinfo() results, the client opens a socket, configures it to non-blocking mode, and initiates the connection request.  At this point, the network stack has send a request to the server to establish the connection.  Because the socket has been set to non-blocking, the connect call will return immediately and not wait for the connection to be established.  As a result any attempt to send data at this point will likely fail.
 
+```
+/* Example server code flow to accept a connection */
+struct pollfd fds;
+int server_fd;
 
+fds.fd = listen_fd;
+fds.events = POLLIN;
+
+poll(&fds, -1);
+
+server_fd = accept(listen_fd, NULL, 0);
+fcntl(server_fd, F_SETFL, O_NONBLOCK);
+```
+
+Applications that use non-blocking sockets use select() or poll() to receive notification of when a socket is ready to send or receive data.  In this case, the server wishes to know when the listening socket has a connection request to process.  It adds the listening socket to a poll set, then waits until a connection request arrives (i.e. POLLIN is true).  The poll() call blocks until POLLIN is set on the socket.  POLLIN indicates that the socket has data to accept.  Since this is a listening socket, the data is a connection request.  The server accepts the request by calling accept().  That returns a new socket to the server, which is ready for data transfers.
+
+The
 
 ## Connection-less (UDP) Communication
 ## Advantages
