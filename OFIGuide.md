@@ -31,6 +31,7 @@ Applications using TCP sockets are typically labeled as either a client or serve
 struct addrinfo *ai, hints;
 int listen_fd;
 
+memset(&hints, 0, sizeof hints);
 hints.ai_socktype = SOCK_STREAM;
 hints.ai_flags = AI_PASSIVE;
 getaddrinfo(NULL, "7471", &hints, &ai);
@@ -48,6 +49,23 @@ In this example, the server will listen for connection requests on port 7471 acr
 This example will work with both IPv4 and IPv6.  The getaddrinfo() call abstracts the address format away from the server, improving its portability.  Using the data returned by getaddrinfo(), the server allocates a socket of type SOCK_STREAM, and binds the socket to port 7471.
 
 In practice, most enterprise-level applications make use of non-blocking sockets.  The fcntl() command sets the listening socket to non-blocking mode.  This will affect how the server processes connection requests (shown below).  Finally, the server starts listening for connection requests by calling listen.  Until listen is called, connection requests that arrive at the server will be rejected by the operating system.
+
+```
+/* Example client code flow to start connection */
+struct addrinfo *ai, hints;
+int fd;
+
+memset(&hints, 0, sizeof hints);
+hints.ai_socktype = SOCK_STREAM;
+getaddrinfo("10.31.20.04", "7471", &hints, &ai);
+
+fd = socket(ai->ai_family, SOCK_STREAM, 0);
+fcntl(fd, F_SETFL, O_NONBLOCK);
+
+connect(fd, ai->ai_addr, ai->ai_addrlen);
+freeaddrinfo(ai);
+```
+
 
 ## Connectionless (UDP) Communication
 ## Advantages
