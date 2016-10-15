@@ -88,7 +88,46 @@ fcntl(server_fd, F_SETFL, O_NONBLOCK);
 
 Applications that use non-blocking sockets use select() or poll() to receive notification of when a socket is ready to send or receive data.  In this case, the server wishes to know when the listening socket has a connection request to process.  It adds the listening socket to a poll set, then waits until a connection request arrives (i.e. POLLIN is true).  The poll() call blocks until POLLIN is set on the socket.  POLLIN indicates that the socket has data to accept.  Since this is a listening socket, the data is a connection request.  The server accepts the request by calling accept().  That returns a new socket to the server, which is ready for data transfers.
 
-The
+The server sets the new socket to non-blocking mode.  Non-blocking support is particularly important to applications that manage communication with multiple peers.
+
+```
+/* Example client code flow to establish a connection */
+struct pollfd fds;
+int err;
+socklen_t len;
+
+fds.fd = client_fd;
+fds.events = POLLOUT;
+
+poll(&fds, -1);
+
+len = sizeof err;
+getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &err, &len);
+```
+
+The client is notified that its connection request has completed when its connecting socket is 'ready to send data' (i.e. POLLOUT is true).  The poll() call blocks until POLLOUT is set on the socket, indicating the connection request has completed.  Note that connection request may have completed with an error.  The client still needs to check if the connection attempt was successful.  That is not conveyed to the application by the poll() call.  The getsockopt() call is used to retrieve the result of the connection attempt.  If err in this example is set to 0, then the connection attempt succeeded.  The  socket is now ready to send and receive data.
+
+```
+/* Example of client sending data to server */
+struct pollfd fds;
+size_t offset, size, ret;
+char buf[4096];
+
+fds.fd = client_fd;
+fds.events = POLLOUT;
+
+size = sizeof(buf);
+for (offset = 0; offset < size; ) {
+    poll(&fds, -1);
+    
+    ret = send(client_fd, buf + offset, size - offset, 0);
+    offset += ret;
+}
+```
+
+Network communication involves buffering of data at both the sender and receiver sides of the connection. TCP uses a credit based scheme to manage flow control to ensure that there is sufficient buffer space at the receive side of a connection to accept incoming data.  This flow control is hidden from the application by the socket API.  As a result, stream based sockets may not transfer all the data that the application requests to send as part of a single operation.
+
+In this example, the client maintains an offset into the buffer that it wishes to send.  As data is accepted by the network, the offset increases.  The client then waits until the network is ready to accept more data before attempting another transfer.  The poll() operation supports this.  When the client socket is ready for data, it sets POLLOUT to true.  This indicates that send will transfer some additional amount of data.  The client issues a send() request for the remaining amount of buffer that it wishes to transfer.  If send() transfers less data than requested, the client updates the offset, waits for the network to become ready, then tries again.
 
 ## Connection-less (UDP) Communication
 ## Advantages
