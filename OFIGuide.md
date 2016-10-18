@@ -18,7 +18,7 @@ This guide describes the libfabric architecture and interfaces.  It provides ins
 
 # Review of Sockets Communication
 
-The sockets API is a widely used networking API.  This guide assumes that a reader has a working knowledge of programming to sockets.  It makes reference to socket based communications throughout, in an effort to help explain libfabric concepts and how they relate or differ from the socket API.  The following sections provide a high-level overview of socket semantics for reference.
+The sockets API is a widely used networking API.  This guide assumes that a reader has a working knowledge of programming to sockets.  It makes reference to socket based communications throughout, in an effort to help explain libfabric concepts and how they relate or differ from the socket API. To be clear, there is no intent to criticize the socket API.  The objective is to use sockets as a starting reference point in order to explain certain network features or limitations.  The following sections provide a high-level overview of socket semantics for reference.
 
 ## Connected (TCP) Communication
 
@@ -153,10 +153,11 @@ The flow for receiving data is similar to that used to send it.  Because of the 
 
 ## Connection-less (UDP) Communication
 
+<TO DO>
 
 ## Advantages
 
-The socket API has two significant advantages.  First, it is available on a wide variety of operating systems and platforms, and works over the vast majority of available networking hardware.  It is easily the de facto networking API.  This by itself makes appealing to use.
+The socket API has two significant advantages.  First, it is available on a wide variety of operating systems and platforms, and works over the vast majority of available networking hardware.  It is easily the de facto networking API.  This by itself makes it appealing to use.
 
 The second key advantage is that it is relatively easy to program to.  The importance of this should not be overlooked.  Networking APIs that offer access to higher performing features, but are difficult to program to correctly or well, often result in lower application performance.  This is not unlike coding an application in a higher-level language such as C or C++, versus assembly.  Although writing directly to assembly language offers the promise of being better performing, for the vast majority of developers, their applications will perform better if written in C or C++, and using an optimized compiler.  Applications should have a clear need for high-performance networking to select a socket API alternative.
 
@@ -172,10 +173,22 @@ If we examine the socket send() call, once send() returns the application is fre
 
 A better option is for the send() call to copy the application's data into an internal buffer.  The data transfer is then issued out of that buffer, which allows retrying the operation in case of a failure.  The send() call in this case is not blocked, but all data that passes through the network will result in a memory copy to a local buffer, even in the absense of any errors.
 
-The immediate re-use of a data buffer after send() returns is an advantage of keeping the interface simple; however, it does result in negative impact on network performance.  For network or memory limited applications, an alternative API may  be attractive.
+The immediate re-use of a data buffer after send() returns is an advantage of keeping the interface simple; however, it does result in negative impact on network performance.  For network or memory limited applications, an alternative API may be attractive.
+
+The socket API is often considered in conjunction with TCP and UDP, that is, with protocols.  It is intentionally detached from the underlying network hardware implementation, including NICs, switches, and routers.  Access to available network features is therefore constrained by what the API can support.
 
 # High-Performance Networking
+
+By analyzing the socket API in the context of high-performance networking, we can start to see some features that are desirable for any network API.
+
 ## Avoiding Memory Copies
+
+Implementation of the socket API usually results in data copies occuring at both the sender and the receiver.  This is a trade-off made between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transfering data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
+
+To avoid a memory copy at the sender, we need to place the application data directly onto the network.  If we also want to avoid blocking the sending application, we need some way of communicating between the application and the network layer when the buffer is safe to re-use, in case it needs to be re-transmitted.  This leads us to crafting a network interface that behaves asynchronously.  The application will need to issue a request, then receive some sort of notification when the request has completed.
+
+Avoiding a memory copy at the receiver is more challenging.
+
 ### Network Buffers
 ### Resource Management
 ## Asynchronous Operations
