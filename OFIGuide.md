@@ -149,8 +149,17 @@ for (offset = 0; offset < size; ) {
 }
 ```
 
+The flow for receiving data is similar to that used to send it.  Because of the streaming nature of the socket, there is no guarantee that the receiver will obtain all of the available data as part of a single call.  The server instead must wait until the socket is ready to receive data (POLLIN), before calling receive to obtain what data is available.  In this example, the server knows to expect exactly 4 KB of data from the client.
+
 ## Connection-less (UDP) Communication
+
+
 ## Advantages
+
+The socket API has two significant advantages.  First, it is available on a wide variety of operating systems and platforms, and works over the vast majority of available networking hardware.  It is easily the de facto networking API.
+
+The second key advantage is that it is relatively easy to program to.  The importance of this should not be overlooked.  Networking APIs that offer access to higher performing features, but are difficult to program to correctly or well, often result in lower application performance.  This is not unlike coding an application in a higher-level language such as C or C++, versus assembly.  Although writing directly to assembly language gives the illusion of being better performing, for the vast majority of developers, their applications will perform better if written in C or C++, and using an optimized compiler.
+
 ## Disadvantages
 
 # High-Performance Networking
