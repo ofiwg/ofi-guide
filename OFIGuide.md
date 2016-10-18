@@ -168,6 +168,12 @@ Most applications require that network data be sent reliably.  This invariably m
 
 Another issue highlighted by the above examples deals with the asynchronous nature of network traffic.  When using a reliable transport, it is not enough to place an application's data onto the network.  If the network is busy, it could drop the packet, or the data could become corrupted during a transfer.  The data must be kept until it has been acknowledged by the peer, so that it can be resent if needed.  The socket API is defined such that the application owns the contents of its memory buffers after a socket call returns.
 
+If we examine the socket send() call, once send() returns the application is free to modify its buffer.  The network implementation has a couple of options.  One option is for the send call to place the data directly onto the network.  The call must then block before returning to the user until the peer acknowledges that it received the data.  The send() can then return.  The obvious problem with this approach is that the application is blocked in the send() call until the network stack at the peer can process the data and generate an acknowledgement.  This can be a significant amount of time where the application is blocked and unable to process other work, such as responding to messages from other clients.
+
+A better option is for the send() call to copy the application's data into an internal buffer.  The data transfer is then issued out of that buffer, which allows retrying the operation in case of a failure.  The send() call in this case is not blocked, but all data that passes through the network will result in a memory copy to a local buffer, even in the absense of any errors.
+
+The immediate re-use of a data buffer after send() returns is an advantage of keeping the interface simple; however, it does result in negative impact on network performance.  For network or memory limited applications, an alternative API may  be attractive.
+
 # High-Performance Networking
 ## Avoiding Memory Copies
 ### Network Buffers
