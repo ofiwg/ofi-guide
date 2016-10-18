@@ -105,7 +105,9 @@ len = sizeof err;
 getsockopt(client_fd, SOL_SOCKET, SO_ERROR, &err, &len);
 ```
 
-The client is notified that its connection request has completed when its connecting socket is 'ready to send data' (i.e. POLLOUT is true).  The poll() call blocks until POLLOUT is set on the socket, indicating the connection request has completed.  Note that connection request may have completed with an error.  The client still needs to check if the connection attempt was successful.  That is not conveyed to the application by the poll() call.  The getsockopt() call is used to retrieve the result of the connection attempt.  If err in this example is set to 0, then the connection attempt succeeded.  The  socket is now ready to send and receive data.
+The client is notified that its connection request has completed when its connecting socket is 'ready to send data' (i.e. POLLOUT is true).  The poll() call blocks until POLLOUT is set on the socket, indicating the connection request has completed.  Note that connection request may have completed with an error.  The client still needs to check if the connection attempt was successful.  That is not conveyed to the application by the poll() call.  The getsockopt() call is used to retrieve the result of the connection attempt.  If err in this example is set to 0, then the connection attempt succeeded.  The socket is now ready to send and receive data.
+
+After a connection has been established, the process of sending or receiving data is the same for both the client and server.  The examples below differ only by name of the socket variable.
 
 ```
 /* Example of client sending data to server */
@@ -128,6 +130,24 @@ for (offset = 0; offset < size; ) {
 Network communication involves buffering of data at both the sender and receiver sides of the connection. TCP uses a credit based scheme to manage flow control to ensure that there is sufficient buffer space at the receive side of a connection to accept incoming data.  This flow control is hidden from the application by the socket API.  As a result, stream based sockets may not transfer all the data that the application requests to send as part of a single operation.
 
 In this example, the client maintains an offset into the buffer that it wishes to send.  As data is accepted by the network, the offset increases.  The client then waits until the network is ready to accept more data before attempting another transfer.  The poll() operation supports this.  When the client socket is ready for data, it sets POLLOUT to true.  This indicates that send will transfer some additional amount of data.  The client issues a send() request for the remaining amount of buffer that it wishes to transfer.  If send() transfers less data than requested, the client updates the offset, waits for the network to become ready, then tries again.
+
+```
+/* Example of server receiving data from client */
+struct pollfd fds;
+size_t offset, size, ret;
+char buf[4096];
+
+fds.fd = server_fd;
+fds.events = POLLIN;
+
+size = sizeof(buf);
+for (offset = 0; offset < size; ) {
+    poll(&fds, -1);
+
+    ret = recv(client_fd, buf + offset, size - offset, 0);
+    offset += ret;
+}
+```
 
 ## Connection-less (UDP) Communication
 ## Advantages
