@@ -183,7 +183,7 @@ By analyzing the socket API in the context of high-performance networking, we ca
 
 ## Avoiding Memory Copies
 
-The socket API implementation usually results in data copies occuring at both the sender and the receiver.  This is a trade-off made between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transfering data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
+The socket API implementation usually results in data copies occuring at both the sender and the receiver.  This is a trade-off made between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transferring data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
 
 To avoid a memory copy at the sender, we need to place the application data directly onto the network.  If we also want to avoid blocking the sending application, we need some way of communicating between the application and the network layer when the buffer is safe to re-use, in case it needs to be re-transmitted.  This leads us to crafting a network interface that behaves asynchronously.  The application will need to issue a request, then receive some sort of notification when the request has completed.
 
@@ -209,7 +209,11 @@ Additionally, supporting asynchronous operations (described in detail below) wil
 
 ## Asynchronous Operations
 
+Arguably, the key feature of achieving high-performance is supporting asynchronous operations.  The socket API supports asynchronous transfers with its non-blocking mode.  However, because the API itself operates synchronously, the result is additional data copies.  For an API to be asynchronous, an application needs to be able to submit work, then later receive some sort of notification that the work is done.  In order to avoid extra memory copies, the application must agree not to modify its data buffers until the operation completes.
 
+There are two main ways to notify an application that it is safe to re-use its data buffers.  One mechanism is for the network layer to invoke some sort of callback or send a signal to the application that the request is done.  Some asynchronous APIs use this mechanism.  The drawback of this approach is that the signal interrupts the application's processing.  This can negatively impact the CPU caches, plus requires interrupt processing.  Additionally, it is often difficult to develop an application that can handle processing a signal that can occur at anytime.
+
+An alternative mechanism for supporting asynchronous operations is to write events into some sort of completion queue when an operation completes.  This provides a way to indicate to an application when a data transfer has completed, plus gives the application control over when and how to process completed requests.  For example, it can process requests in batches to improve code locality and performance.
 
 ### Interrupts and Signals
 ### Event Queues
