@@ -194,8 +194,23 @@ Instead, what is needed is a way for the receiving application to provide one or
 In addition to processing messages, some applications want to receive data and locate it into a specific location in memory.  For example, a database may want to merge received data records into an existing table.  In such cases, even data that arrives from the network goes directly into an application's receive buffers, it may still need to be copied into its final location.  It would be ideal if the network supporting placing data that arrives from the network being placed into a specific memory buffer, with the buffer determined based on the contents of the data.
 
 ### Network Buffers
+
+Based on the problems described above, we can start to see that avoiding memory copies depends on the ownership of the memory buffers used for network traffic.  With socket based transports, the network buffers are owned and managed by the networking stack.  This is usually handled by the operating system kernel.  However, this results in the data 'bouncing' between the application buffers and the network buffers.  By putting the application in control of managing the network buffers, we can avoid this overhead.  The cost for doing so is additional complexity in the application.
+
+Note that even though we want the application to own the network buffers, we would still like to avoid the situation where the application implements a complex network protocol.  The trade-off is that the app provides the data buffers to the network stack, but the network stack continues to handle things like flow control, reliability, and segmentation and reassembly.
+
 ### Resource Management
+
+We define resource management to mean properly allocating network resources in order to avoid overrunning data buffers or queues.  Flow control is a common aspect of resource management.  Without proper flow control, a sender can overrun a slow or busy receiver.  This can result in dropped packets, retransmissions, and increased network congestion.  Significant research and development has gone into implementation flow control algorithms.  Because of its complexity, it is not something that an application developer should need to deal with.  That said, there are some applications where flow control simply falls out of the network protocol.  For example, a request-reply protocol naturally has flow control built in.
+
+For our purposes, we expand the definition of resource management beyond flow control.  Flow control typically only deals with available network buffering at a peer.  We also want to be concerned about having available space in outbound data transfer queues.  That is, as we issue commands to the local NIC to send data, that those commands can be queued at the NIC.  When we consider reliability, this means tracking outstanding requests until they have been acknowledged.  Resource management will need to ensure that we do not overflow that request queue.
+
+Additionally, supporting asynchronous operations (described in detail below) will introduce potential new queues.  Those queues must not overflow as well.
+
 ## Asynchronous Operations
+
+
+
 ### Interrupts and Signals
 ### Event Queues
 ## Direct Hardware Access
