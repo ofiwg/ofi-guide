@@ -323,11 +323,13 @@ As an example, a NIC needs to have the destination address as part of a send ope
 
 ## Memory Footprint
 
-Memory footprint concerns are most notable among high-performance computing (HPC) applications that communicate with thousands of peers.  Excessive memory consumption impacts application scalability, limiting the number of peers that can operate in parallel to solve
+Memory footprint concerns are most notable among high-performance computing (HPC) applications that communicate with thousands of peers.  Excessive memory consumption impacts application scalability, limiting the number of peers that can operate in parallel to solve.  There is often a trade-off between minimizing the memory footprint needed for network communication, application performance, and ease of use of the network interface.
+
+As we discussed with the socket API semantics, part of the ease of using sockets comes from the network layering copying the user's buffer into an internal buffer belonging to the network stack.  The amount of internal buffering that's made available to the application directly correlates with the bandwidth that an application can achieve.  In general, larger the internal buffering increases network performance, with a cost of increasing the memory footprint consumed by the application.  This memory footprint exists independent of the amount of memory allocated directly by the application.
 
 ### Addressing
 
-
+The amount of memory required to address
 
 ### Communication Resources
 ### Network Buffering
