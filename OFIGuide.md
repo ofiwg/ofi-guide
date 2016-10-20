@@ -322,7 +322,13 @@ With devices that are directly accessible by a single application, there are opp
 As an example, a NIC needs to have the destination address as part of a send operation.  If an application is sending to a single peer, that information can be cached and be part of a pre-formatted network header.  This is only possible if the NIC driver knows that the destination will not change between sends.  The closer that the driver can be to the application, the greater the chance for optimization.  An optimal approach is for the driver to be part of a library that executes entirely within the application process space.
 
 ## Memory Footprint
+
+Memory footprint concerns are most notable among high-performance computing (HPC) applications that communicate with thousands of peers.  Excessive memory consumption impacts application scalability, limiting the number of peers that can operate in parallel to solve
+
 ### Addressing
+
+
+
 ### Communication Resources
 ### Network Buffering
 #### Shared Receive Queues
