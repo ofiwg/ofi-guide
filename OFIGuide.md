@@ -216,7 +216,17 @@ There are two main ways to notify an application that it is safe to re-use its d
 An alternative mechanism for supporting asynchronous operations is to write events into some sort of completion queue when an operation completes.  This provides a way to indicate to an application when a data transfer has completed, plus gives the application control over when and how to process completed requests.  For example, it can process requests in batches to improve code locality and performance.
 
 ### Interrupts and Signals
+
+Interrupts are a natural extension to supporting asynchronous operations.  However, when dealing with an asynchronous API, they can negatively impact performnace.  Interrupts, even when directed to a kernel agent, can interfere with application processing.
+
+If an application has an asynchronous interface with completed operations written into a completion queue, it is often sufficient for the application to simply check the queue for completions.  As long as the application has other work to perform, there is no need for it to block.  This alleviates the need for interrupt generation.  A NIC merely needs to write an entry into the completion queue and update a tail pointer to signal that a request is done.
+
+If we follow this argument, then it can be beneficial to give the application control over when interrupts should occur and when to write events to some sort of wait object.  By having the application notify the network layer that it will wait until a completion occurs, we can better manage the number and type of interrupts that are generated.
+
 ### Event Queues
+
+As outlined above, there are performance advantages to having an API that reports completions or provides other types of notification using an event queue.  A very simple type of event queue merely tracks completed operations.  As data is received or a send completes, an entry is written into the event queue.
+
 ## Direct Hardware Access
 ### Kernel Bypass
 ### Direct Data Placement
