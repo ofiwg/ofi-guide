@@ -352,9 +352,22 @@ The main issue with this sort of address reduction is that it is difficult to ac
 
 In order to reduce an application's memory footprint, we need to consider features that fall outside of the socket API.  So far, much of the discussion has been around sending data to a peer.  We now want to focus on the best mechanisms for receiving data.
 
-With sockets, when an app has data to receive (indicated, for example, by a POLLIN event), we call recv().  The network stack copies the receive data into its buffer and returns.
+With sockets, when an app has data to receive (indicated, for example, by a POLLIN event), we call recv().  The network stack copies the receive data into its buffer and returns.  If we want to avoid the data copy on the receive side, we need a way for the application to post its buffers to the network stack before data arrives.
+
+Arguably, a natural way of extending the socket API to support is to have each call to recv() simply post the buffer to the network layer.  As data is received, the receive buffers are removed in the order that they were posted.  Data is copied into the posted buffer and returned to the user.  It would be noted that the size of the posted receive buffer may be larger (or smaller) than the amount of data received.  If the available buffer space is larger, hypothetically, the network layer could wait a short amount of time to see if more data arrives.  If nothing more arrives, the receive completes with the buffer returned to the application.
+
+This raises an issue regarding how to handle buffering on the receive side.  So far, with sockets we've mostly considered a streaming protocol.  However, many applications want to deal with messages.  If they send an 8 KB message, they want the receiver to receive an 8 KB message.  Message boundaries need to be maintained.
+
+If an application sends and receives a fixed sized message, buffer allocation becomes trivial.  The app can post X number of buffers each of an optimal size.  However, if there is a wide mix in message sizes, difficulties arise.  It is not uncommon for an app to have 80% of its messages be a couple hundred of bytes or less, but 80% of the total data that it sends to be in large transfers that are a megabyte or more.  Pre-posting receive buffers in such a situation is challenging.
+
+A commonly used technique used to handle this situation is to implement one application level protocol for smaller messages, and use a separate protocol for transfers that are larger than some given threshold.  This would allow an application to post a bunch of smaller messages, say 4 KB, to receive data.  For transfers that are larger than 4 KB, a different communication protocol is used, possibly over a different socket or endpoint.
 
 ### Shared Receive Queues
+
+If an application pre-posts receive buffers to a network queue, it needs to balance the size of each buffer posted, the number of buffers that are posted to each queue, and the number of queues that are in use.  With sockets, every socket maintains an independent receive queue where data is placed.  If an application is using 1000 sockets and posts 100 buffers, that are each 4 KB, that results in 400 MB of memory buffer space being consumed to receive data.  (We can start to realize that by eliminating memory copies, the trade off is memory consumption.)  While 400 MB seems like a lot of memory, there is less than half a megabyte allocated to a single receive queue.  At today's networking speeds, that amount of space can be consumed within a millisecond.  The result is that if only a few streams are in use, the application will experience long delays where flow control will kick in and back the transfers off.
+
+There are a couple of observations that we can make here.  The first is that in order to achieve high scalability, we need to move away from a connection-oriented protocol, such as streaming sockets.
+
 ### Multi-Receive Buffers
 ## Optimal Hardware Allocation
 ### Sharing Command Queues
