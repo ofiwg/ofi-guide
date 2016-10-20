@@ -251,7 +251,41 @@ We want to design a network interface that can meet the requirements outlined ab
 
 When considering performance goals for an API, we need to take into account the target application use cases.  For the purposes of this discussion, we want to consider applications that communicate with thousands to millions of peer processes.  Data transfers will include millions of small messages per second per peer, up to gigabytes of data being transfered.  At such extreme scales, even small optimizations are measurable, in terms of both performance and power.  If we have a million peers sending a millions messages per second, eliminating even a single instruction from the code path quickly multiplies to saving billions of instructions from execution when viewing the operation of the entire application.
 
+We once again refer to the socket API as part of this discussion in order to illustrate how an API can affect performance.
+
+```
+/* Notable socket function prototypes */
+/* "control" functions */
+int socket(int domain, int type, int protocol);
+int bind(int socket, const struct sockaddr *addr, socklen_t addrlen);
+int listen(int socket, int backlog);
+int accept(int socket, struct sockaddr *addr, socklen_t *addrlen);
+int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
+int shutdown(int socket, int how);
+int close(int socket); 
+
+/* "fast path" data operations - send only */
+ssize_t send(int socket, const void *buf, size_t len, int flags);
+ssize_t sendto(int socket, const void *buf, size_t len, int flags,
+    const struct sockaddr *dest_addr, socklen_t addrlen);
+ssize_t sendmsg(int socket, const struct msghdr *msg, int flags);
+ssize_t write(int socket, const void *buf, size_t count);
+ssize_t writev(int socket, const struct iovec *iov, int iovcnt);
+
+/* "indirect" data operations */
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+int select(int nfds, fd_set *readfds, fd_set *writefds,
+    fd_set *exceptfds, struct timeval *timeout); 
+```
+
+Examining this list, there are a couple of features to note.  First, there are multiple calls that can be used to send data, as well as multiple calls that can be used to wait for a non-blocking socket to become ready.  This will be discussed in more detail further on.  Second, the operations have been split into different groups (terminology is ours).  Control operations are those functions that an application seldom invokes during execution.  They often only occur as part of initialization.
+
+Data operations, on the other hand, may be called hundreds to millions of times during an application's lifetime.  They deal directly or indirectly with transferring or receiving data over the network.  Data operations can be split into two groups.  Fast path calls interact with the network stack to immediately send or receive data.  In order to achieve high bandwidth and low latency, those operations need to be as fast as possible.  Non-fast path operations that still deal with data transfers are those calls, that while still frequently called by the application, are not as performance critical.  For example, the select() and poll() calls are used to block an application thread until a socket becomes ready.  Because those calls suspend the thread execution, performance is a lesser concern.  (Performance of those operations is still of a concern, but the cost of executing the operating system scheduler often swamps any but the most substantial performance gains.)
+
 ## Call Setup Costs
+
+
+
 ## Branches and Loops
 ## Command Formatting
 ## Memory Footprint
