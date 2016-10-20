@@ -241,6 +241,10 @@ For security and stability reasons, operating system kernels cannot rely on data
 
 ### Direct Data Placement
 
+Direct data placement means avoiding data copies when sending and receive data, plus placing received data into the correct memory buffer where needed.  On a broader scale, it is part of having direct hardware access, with the application and NIC communicating directly with common memory buffers and queues.
+
+Direct data placement is often thought of when referring to RDMA - remote direct memory access.  RDMA includes reading and writing memory that belongs to a process running on a node that is across the network.  The memory access require that the NIC access the memory without involving the execution of the peer process.  RDMA relies on offloading the network transport onto the NIC in order to avoid interrupting the target process.
+
 # Designing Interfaces for Performance
 ## Call Setup Costs
 ## Branches and Loops
