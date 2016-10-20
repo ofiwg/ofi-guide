@@ -246,6 +246,11 @@ Direct data placement means avoiding data copies when sending and receive data, 
 Direct data placement is often thought of when referring to RDMA - remote direct memory access.  RDMA includes reading and writing memory that belongs to a process running on a node that is across the network.  The memory access require that the NIC access the memory without involving the execution of the peer process.  RDMA relies on offloading the network transport onto the NIC in order to avoid interrupting the target process.
 
 # Designing Interfaces for Performance
+
+We want to design a network interface that can meet the requirements outlined above.  Moreover, we also want to take into account the performance of the interface itself.  It is often not obvious how an interface can adversely affect performance, versus it being a result of its implementation.  The following sections describe how interface choices can impact performance.  Of course, when we begin defining the actual APIs that an application will use, we will need to consider trading off raw performance with ease of use.
+
+When considering performance goals for an API, we need to take into account the target application use cases.  For the purposes of this discussion, we want to consider applications that communicate with thousands to millions of peer processes.  Data transfers will include millions of small messages per second per peer, up to gigabytes of data being transfered.  At such extreme scales, even small optimizations are measurable, in terms of both performance and power.  If we have a million peers sending a millions messages per second, eliminating even a single instruction from the code path quickly multiplies to saving billions of instructions from execution when viewing the operation of the entire application.
+
 ## Call Setup Costs
 ## Branches and Loops
 ## Command Formatting
