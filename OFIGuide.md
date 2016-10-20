@@ -228,7 +228,17 @@ If we follow this argument, then it can be beneficial to give the application co
 As outlined above, there are performance advantages to having an API that reports completions or provides other types of notification using an event queue.  A very simple type of event queue merely tracks completed operations.  As data is received or a send completes, an entry is written into the event queue.
 
 ## Direct Hardware Access
+
+When discussing the network layer, most software implementations refer to kernel modules responsible for implementing the necessary transport and network protocols.  However, if we want network latencies to approach sub-microsecond speeds, then we need to remove as much software between the application and its access to the hardware as possible.  One way to do this is for the application to have direct access to the network interface controller's command queues.  Similarly, the NIC requires direct access to the application's data buffers and control structures, such as the above mentioned completion queues.
+
+Note that when we speak about an application having direct access to network hardware, we're referring to the application process.  Naturally, an application is highly unlikely to code for a specific hardware NIC.  That work would be left to some sort of network library that specifically targetted the NIC.  The actual network layer, which implements the network transport, could be part of the network library or actually offloaded onto the NIC's hardware or firmware.
+
 ### Kernel Bypass
+
+Kernel bypass is a feature that allows the application to avoid calling into the kernel for data transfer operations.  This is possible when it has direct access to the NIC hardware.  Complete kernel bypass is impractical because of security concerns and resource management constraints.  However, it is possible to avoid kernel calls for what are called 'fast-path' operations, such as send or receive.
+
+For security and stability reasons, operating system kernels cannot rely on data that comes from user space applications.  As a result, even a simple kernel call often requires acquiring and releasing locks, with data verification checks.  If we can limit the affects of a poorly written or malicious application to its own process space, we can avoid the overhead that comes with kernel validation without impacting system stability.
+
 ### Direct Data Placement
 
 # Designing Interfaces for Performance
