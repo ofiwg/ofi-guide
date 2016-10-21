@@ -374,9 +374,20 @@ A shared receive queue is a network queue that can receive data for many differe
 
 ### Multi-Receive Buffers
 
+Shared receive queues greatly improves application scalability; however, it still results in some inefficiencies as defined so far.  We've only considered the case of posting a series of fixed sized memory buffers to the receive queue.  As mentioned, determining the size of each buffer is challenging.  Transfers larger than the fixed size require using some other protocol in order to complete.  If transfers are typically much smaller than the fixed size, then the extra buffer space goes unused.
 
+Again referring to our example, if the application posts 1000 buffers, then it can only receive 1000 messages before the queue is emptied.  At data rates measured in millions of messages per second, this will introduce stalls in the data stream.  An obvious solution is to increase the number of buffers posted.  The problem is dealing with variable sized messages, including some which are only a couple hundred bytes in length.  For example, if the average message size in our case is 256 bytes or less, then even though we've allocated 4 MB of buffer space, we only make use of 6% of that space.  The rest is wasted in order to handle messages which may only occasionally be up to 4 KB.
+
+A second optimization that we can make is to fill up each posted receive buffer as messages arrive.  So, instead of a 4 KB buffer being removed from use as soon as a single 256 byte message arrives, it can instead receive up to 16, 256 byte, messages.  We refer to such a feature as 'multi-receive' buffers.
+
+With multi-receive buffers, instead of posting a bunch of smaller buffers, we can instead post a single larger buffer, say the entire 4 MB buffer, at once.  As data is received, it is placed into the posted buffer.  Unlike TCP streams, we still maintain message boundaries.  The advantages here are twofold.  Not only is memory used more efficiently, allowing us to receive more smaller messages at once and larger messages overall, but we reduce the number of function calls that the application must make to maintain its supply of available receive buffers.
+
+When combined with shared receive queues, multi-receive buffers help support optimal receive side buffering and processing.  The main drawback to supporting multi-receive buffers are that the application will not necessarily know up front how many messages may be associated with a single posted memory buffer.  This is rarely a problem for applications.
 
 ## Optimal Hardware Allocation
+
+
+
 ### Sharing Command Queues
 ### Multiple Queues
 ## Progress Model Considerations
