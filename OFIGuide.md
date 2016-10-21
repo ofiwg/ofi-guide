@@ -251,15 +251,131 @@ We want to design a network interface that can meet the requirements outlined ab
 
 When considering performance goals for an API, we need to take into account the target application use cases.  For the purposes of this discussion, we want to consider applications that communicate with thousands to millions of peer processes.  Data transfers will include millions of small messages per second per peer, up to gigabytes of data being transfered.  At such extreme scales, even small optimizations are measurable, in terms of both performance and power.  If we have a million peers sending a millions messages per second, eliminating even a single instruction from the code path quickly multiplies to saving billions of instructions from execution when viewing the operation of the entire application.
 
+We once again refer to the socket API as part of this discussion in order to illustrate how an API can affect performance.
+
+```
+/* Notable socket function prototypes */
+/* "control" functions */
+int socket(int domain, int type, int protocol);
+int bind(int socket, const struct sockaddr *addr, socklen_t addrlen);
+int listen(int socket, int backlog);
+int accept(int socket, struct sockaddr *addr, socklen_t *addrlen);
+int connect(int socket, const struct sockaddr *addr, socklen_t addrlen);
+int shutdown(int socket, int how);
+int close(int socket); 
+
+/* "fast path" data operations - send only */
+ssize_t send(int socket, const void *buf, size_t len, int flags);
+ssize_t sendto(int socket, const void *buf, size_t len, int flags,
+    const struct sockaddr *dest_addr, socklen_t addrlen);
+ssize_t sendmsg(int socket, const struct msghdr *msg, int flags);
+ssize_t write(int socket, const void *buf, size_t count);
+ssize_t writev(int socket, const struct iovec *iov, int iovcnt);
+
+/* "indirect" data operations */
+int poll(struct pollfd *fds, nfds_t nfds, int timeout);
+int select(int nfds, fd_set *readfds, fd_set *writefds,
+    fd_set *exceptfds, struct timeval *timeout); 
+```
+
+Examining this list, there are a couple of features to note.  First, there are multiple calls that can be used to send data, as well as multiple calls that can be used to wait for a non-blocking socket to become ready.  This will be discussed in more detail further on.  Second, the operations have been split into different groups (terminology is ours).  Control operations are those functions that an application seldom invokes during execution.  They often only occur as part of initialization.
+
+Data operations, on the other hand, may be called hundreds to millions of times during an application's lifetime.  They deal directly or indirectly with transferring or receiving data over the network.  Data operations can be split into two groups.  Fast path calls interact with the network stack to immediately send or receive data.  In order to achieve high bandwidth and low latency, those operations need to be as fast as possible.  Non-fast path operations that still deal with data transfers are those calls, that while still frequently called by the application, are not as performance critical.  For example, the select() and poll() calls are used to block an application thread until a socket becomes ready.  Because those calls suspend the thread execution, performance is a lesser concern.  (Performance of those operations is still of a concern, but the cost of executing the operating system scheduler often swamps any but the most substantial performance gains.)
+
 ## Call Setup Costs
+
+The amount of work that an application needs to perform before issuing a data transfer operation can affect performance, especially message rates.  Obviously, the more parameters an application must push on the stack to call a function increases its instruction count.  However, replacing stack variables with a single data structure does not help to reduce the setup costs.
+
+Suppose that an application wishes to send a single data buffer of a given size to a peer.  If we examine the socket API, the best fit for such an operation is the write() call.  That call takes only those values which are necessary to perform the data transfer.  The send() call is a close second, and send() is a more natural function name for network communication, but send() requires one extra argument over write().  Other functions are even worse in terms of setup costs.  The sendmsg() function, for example, requires that the application format a data structure, the address of which is passed into the call.  This requires significantly more instructions from the application if done for every data transfer.
+
+Even though all other send functions can be replaced by sendmsg(), it is useful to have multiple ways for the application to issue send requests.  Not only are the other calls easier to read and use (which lower software maintenance costs), but they can also improve performance.
+
 ## Branches and Loops
+
+When designing an API, developers rarely consider how the API impacts the underlying implementation.  However, the selection of API parameters can require that the underlying implementation add branches or use control loops.  Consider the difference between the write() and writev() calls.  The latter passes in an array of I/O vectors.
+
+```
+/* Sample implementation for processing an array */
+for (i = 0; i < iovcnt; i++) {
+    ...
+}
+```
+
+In order to process the iovec array, the natural software construct would be to use a loop to iterate over the entries.  Loops result in additional processing.  Typically, a loop requires initializing a loop control variable (e.g. i = 0), adds ALU operations (e.g. i++), and a comparison (e.g. i < iovcnt).  This overhead is necessary to handle an arbitrary number of iovec entries.  If the common case is that the application wants to send a single data buffer, write() is a better option.
+
+In addition to control loops, an API can result in the implementation needing branches.  Branches can change the execution flow of a program, impacting processor pipelining techniques.  Processor branch prediction helps alleviate this issue.  However, while branch prediction can be correct nearly 100% of the time while running a micro-benchmark, such as a network bandwidth or latency test, with more realistic network traffic, the impact can become measurable.
+
+We can easily see how an API can introduce branches into the code flow if we examine the send() call.  Send() takes an extra flags parameter over the write() call.  This allows the application to modify the behavior of send().  From the viewpoint of implementing send(), the flags parameter must be checked.  In the best case, this adds one additional check (flags are non-zero).  In the worst case, every valid flag may need a separate check, resulting in potentially dozens of checks.
+
+Overall, the sockets API is well designed considering these performance implications.  It provides complex calls where they are needed, with simpler functions available that can avoid some of the overhead inherent in other calls.
+
 ## Command Formatting
+
+The ultimate objective of invoking a network function is to transfer or receive data from the network.  In this section, we're dropping to the very bottom of the software stack to the component responsible for directly accessing the hardware.  This is usually referred to as the network driver, and its implementation is often tied to a specific piece of hardware, or a series of NICs by a single hardware vendor.
+
+In order to signal a NIC that it should read a memory buffer and copy that data onto the network, the software driver usually needs to write some sort of command to the NIC.  To limit hardware complexity and cost, a NIC may only support a couple of command formats.  This differs from the software interfaces that we've been discussing, where we can have different APIs of varying complexity in order to reduce overhead.  There can be significant costs associated with formatting the command and posting it to the hardware.
+
+With a standard NIC, the command is formatted by a kernel driver.  That driver sits at the bottom of the network stack servicing requests from multiple applications.  It must typically format each command only after a request has passed through the network stack.
+
+With devices that are directly accessible by a single application, there are opportunities to use pre-formatted command structures.  The more of the command that can be initialized prior to the application submitting a network request, the more streamlined the process, and the better the performance.
+
+As an example, a NIC needs to have the destination address as part of a send operation.  If an application is sending to a single peer, that information can be cached and be part of a pre-formatted network header.  This is only possible if the NIC driver knows that the destination will not change between sends.  The closer that the driver can be to the application, the greater the chance for optimization.  An optimal approach is for the driver to be part of a library that executes entirely within the application process space.
+
 ## Memory Footprint
-### Addressing
-### Communication Resources
-### Network Buffering
-#### Shared Receive Queues
-#### Multi-Receive Buffers
+
+Memory footprint concerns are most notable among high-performance computing (HPC) applications that communicate with thousands of peers.  Excessive memory consumption impacts application scalability, limiting the number of peers that can operate in parallel to solve.  There is often a trade-off between minimizing the memory footprint needed for network communication, application performance, and ease of use of the network interface.
+
+As we discussed with the socket API semantics, part of the ease of using sockets comes from the network layering copying the user's buffer into an internal buffer belonging to the network stack.  The amount of internal buffering that's made available to the application directly correlates with the bandwidth that an application can achieve.  In general, larger the internal buffering increases network performance, with a cost of increasing the memory footprint consumed by the application.  This memory footprint exists independent of the amount of memory allocated directly by the application.  Eliminating network buffering not only helps with performance, but also scalability, by reducing the memory footprint needed to support the application.
+
+While network memory buffering increases as an application scales, it can often be configured to a fixed size.  The amount of buffering needed is dependent on the number of active communication streams being used at any one time.  That number is often significantly lower than the total number of peers that an application may need to communicate with.  The amount of memory required to address the peers, however, usually has a linear relationship with the total number of peers.
+
+With the socket API, each peer is identified using a struct sockaddr.  If we consider a UDP based socket application using IPv4 addresses, a peer is identified by the following address.
+
+```
+/* IPv4 socket address - with typedefs removed */
+struct sockaddr_in {
+    uint16_t sin_family; /* AF_INET */
+    uint16_t sin_port;
+    struct {
+        uint32_t sin_addr;
+    } in_addr;
+};
+```
+
+In total, the application requires 8-bytes of addressing for each peer.  If the app communicates with a million peers, that explodes to roughly 8 MB of memory space that is consumed just to maintain the address list.  If IPv6 addressing is needed, then the requirement increases nearly by a factor of 4.
+
+Luckily, there are some tricks that can be used to help reduce the addressing memory footprint, though doing so will introduce more instructions into code path to access the network stack.  For instance, we can notice that all addresses in the above example have the same sin_family value (AF_INET).  There's no need to store that for each address.  This potentially shrinks each address from 8 bytes to 6.  (We may be left with unaligned data, but that's a trade-off to reducing the memory consumption.)  Depending on how the addresses are assigned, further reduction may be possible.  For example, if the application uses the same set of port addresses at each node, then we can eliminate storing the port, and instead calculate it from some base value.  This type of trick can be applied to even the IP portion of the address if the app is lucky enough to run across sequential IP addresses.
+
+The main issue with this sort of address reduction is that it is difficult to achieve.  It requires that each application check for and handle address compression, exposing the application to the addressing format used by the networking stack.  It should be kept in mind that TCP/IP and UDP/IP addresses are logical addresses, not physical.  When running over Ethernet, the addresses that appear at the link layer are MAC addresses, not IP addresses.  The IP to MAC address association is managed by the network software.  We would like to provide addressing that is simple for an application to use, but at the same time can provide a minimal memory footprint.
+
+## Communication Resources
+
+We need to take a brief detour in the discussion in order delve deeper into the network problem and solution space.  Instead of continuing to think of a socket as a single entity, with both send and receive capabilities, we want to consider its components separately. A network socket can be viewed as three basic constructs: a transport level address, a send or transmit queue, and a receive queue.  Because our discussion will begin to pivot away from pure socket semantics, we will refer to our network 'socket' as an endpoint.
+
+In order to reduce an application's memory footprint, we need to consider features that fall outside of the socket API.  So far, much of the discussion has been around sending data to a peer.  We now want to focus on the best mechanisms for receiving data.
+
+With sockets, when an app has data to receive (indicated, for example, by a POLLIN event), we call recv().  The network stack copies the receive data into its buffer and returns.  If we want to avoid the data copy on the receive side, we need a way for the application to post its buffers to the network stack before data arrives.
+
+Arguably, a natural way of extending the socket API to support is to have each call to recv() simply post the buffer to the network layer.  As data is received, the receive buffers are removed in the order that they were posted.  Data is copied into the posted buffer and returned to the user.  It would be noted that the size of the posted receive buffer may be larger (or smaller) than the amount of data received.  If the available buffer space is larger, hypothetically, the network layer could wait a short amount of time to see if more data arrives.  If nothing more arrives, the receive completes with the buffer returned to the application.
+
+This raises an issue regarding how to handle buffering on the receive side.  So far, with sockets we've mostly considered a streaming protocol.  However, many applications deal with messages which end up being layered over the data stream.  If they send an 8 KB message, they want the receiver to receive an 8 KB message.  Message boundaries need to be maintained.
+
+If an application sends and receives a fixed sized message, buffer allocation becomes trivial.  The app can post X number of buffers each of an optimal size.  However, if there is a wide mix in message sizes, difficulties arise.  It is not uncommon for an app to have 80% of its messages be a couple hundred of bytes or less, but 80% of the total data that it sends to be in large transfers that are a megabyte or more.  Pre-posting receive buffers in such a situation is challenging.
+
+A commonly used technique used to handle this situation is to implement one application level protocol for smaller messages, and use a separate protocol for transfers that are larger than some given threshold.  This would allow an application to post a bunch of smaller messages, say 4 KB, to receive data.  For transfers that are larger than 4 KB, a different communication protocol is used, possibly over a different socket or endpoint.
+
+### Shared Receive Queues
+
+If an application pre-posts receive buffers to a network queue, it needs to balance the size of each buffer posted, the number of buffers that are posted to each queue, and the number of queues that are in use.  With sockets, every socket maintains an independent receive queue where data is placed.  If an application is using 1000 endopints and posts 100 buffers, each 4 KB, that results in 400 MB of memory space being consumed to receive data.  (We can start to realize that by eliminating memory copies, one of the trade offs is increased memory consumption.)  While 400 MB seems like a lot of memory, there is less than half a megabyte allocated to a single receive queue.  At today's networking speeds, that amount of space can be consumed within milliseconds.  The result is that if only a few endpoints are in use, the application will experience long delays where flow control will kick in and back the transfers off.
+
+There are a couple of observations that we can make here.  The first is that in order to achieve high scalability, we need to move away from a connection-oriented protocol, such as streaming sockets.  Secondly, we need to reduce the number of receive queues that an application uses.
+
+A shared receive queue is a network queue that can receive data for many different endpoints at once.  With shared receive queues, we no longer associate a receive queue with a specific transport address.  Instead network data will target a specific endpoint address.  As data arrives, the endpoint will remove an entry from the shared receive queue, place the data into the application's posted buffer, and return it to the user.  Shared receive queues can greatly reduce the amount of buffer space needed by an applications.  In the previous example, if a shared receive queue were used, the app could post 10 times the number of buffers (1000 total), yet still consume 100 times less memory (4 MB total).  This is far more scalable.  The drawback is that the application must now be aware of receive queues and shared receive queues, rather than considering the network only at the level of a socket.
+
+### Multi-Receive Buffers
+
+
+
 ## Optimal Hardware Allocation
 ### Sharing Command Queues
 ### Multiple Queues
