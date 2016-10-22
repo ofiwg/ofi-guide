@@ -438,6 +438,10 @@ Enforcing data ordering between messages requires that the messages themselves b
 
 ### Completions
 
+Completion ordering refers to the sequence that asynchronous operations report their completion to the application.  Typically, unreliable data transfer will naturally complete in the order that they are submitted to a transit queue.  Each operation is transmitted to the network, with the completion occuring immediately after.  For reliable data transfers, an operation cannot complete until it has been acknowledged by the peer.  Since ack packets can be lost or possibly take different paths through the network, operations can be marked as completed out of order.  Out of order acks is more likely if messages can be processed out of order.
+
+Asynchronous interfaces requires that the application track their outstanding requests.  Handling out of order completions can increase application complexity, but it does allow for optimizing network utilization.
+
 # OFI Architecture
 ## Framework versus Provider
 ## Control services
