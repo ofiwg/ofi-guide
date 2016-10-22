@@ -428,11 +428,13 @@ An example will help clarify this distinction.  Suppose that an application has 
 
 In this example, we're not concerned with what order the data is received in.  The 64 KB send could be broken in 64 1-KB transfers that take different routes to the destination.  So, bytes 2k-3k could be received before bytes 1k-2k.  Message ordering is not concerned with ordering _within_ a message, only _between_ messages.  With ordered messages, the messages themselves need to be processed in order.
 
-The more relaxed message ordering can be the more optimizations that the network stack can use to transfer the data.  However, the application must be aware of message ordering semantics, and be able to select the desired semantic for its needs.
+The more relaxed message ordering can be the more optimizations that the network stack can use to transfer the data.  However, the application must be aware of message ordering semantics, and be able to select the desired semantic for its needs.  For the purposes of this section, messages refers to transport level operations, which includes RDMA and similar operations (some of which have not yet been discussed).
 
 ### Data
 
-Data ordering refers to the receiving and placement of data both within _and_ between messages.
+Data ordering refers to the receiving and placement of data both within _and_ between messages.  Data ordering is most important to messages that can update the same target memory buffer.  For example, imagine an application that writes a series of database records directly into a peer memory location.  Data ordering, combined with message ordering, ensures that the data from the second write updates memory after the first write completes.  The result is that the memory location will contain the records carried in the second write.
+
+Enforcing data ordering between messages requires that the messages themselves be ordered.  Data ordering can apply within a single message.  Intra-message data ordering indicates that the data for a single message is received in order.  Some applications use this feature to spin reading the last byte of a receive buffer.  Once the byte changes, the application knows that the operation has completed and all earlier data has been received.  (Note that while such behavior is interesting for benchmark purposes, using such a feature in this way is strongly discouraged.  It is not portable between networks or platforms.) 
 
 ### Completions
 
