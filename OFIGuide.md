@@ -374,17 +374,73 @@ A shared receive queue is a network queue that can receive data for many differe
 
 ### Multi-Receive Buffers
 
+Shared receive queues greatly improves application scalability; however, it still results in some inefficiencies as defined so far.  We've only considered the case of posting a series of fixed sized memory buffers to the receive queue.  As mentioned, determining the size of each buffer is challenging.  Transfers larger than the fixed size require using some other protocol in order to complete.  If transfers are typically much smaller than the fixed size, then the extra buffer space goes unused.
 
+Again referring to our example, if the application posts 1000 buffers, then it can only receive 1000 messages before the queue is emptied.  At data rates measured in millions of messages per second, this will introduce stalls in the data stream.  An obvious solution is to increase the number of buffers posted.  The problem is dealing with variable sized messages, including some which are only a couple hundred bytes in length.  For example, if the average message size in our case is 256 bytes or less, then even though we've allocated 4 MB of buffer space, we only make use of 6% of that space.  The rest is wasted in order to handle messages which may only occasionally be up to 4 KB.
+
+A second optimization that we can make is to fill up each posted receive buffer as messages arrive.  So, instead of a 4 KB buffer being removed from use as soon as a single 256 byte message arrives, it can instead receive up to 16, 256 byte, messages.  We refer to such a feature as 'multi-receive' buffers.
+
+With multi-receive buffers, instead of posting a bunch of smaller buffers, we can instead post a single larger buffer, say the entire 4 MB buffer, at once.  As data is received, it is placed into the posted buffer.  Unlike TCP streams, we still maintain message boundaries.  The advantages here are twofold.  Not only is memory used more efficiently, allowing us to receive more smaller messages at once and larger messages overall, but we reduce the number of function calls that the application must make to maintain its supply of available receive buffers.
+
+When combined with shared receive queues, multi-receive buffers help support optimal receive side buffering and processing.  The main drawback to supporting multi-receive buffers are that the application will not necessarily know up front how many messages may be associated with a single posted memory buffer.  This is rarely a problem for applications.
 
 ## Optimal Hardware Allocation
+
+As part of scalability considerations, we not only need to consider the processing and memory resources of the host system, but also the allocation and use of the NIC hardware.  We've referred to network endpoints as combination of transport addressing, transmit queues, and receive queues.  The latter two queues are often implemented as hardware command queues.  Command queues are used to signal the NIC to perform some sort of work.  A transmit queue indicates that the NIC should transfer data.  A transmit command often contains information such as the address of the buffer to transmit, the length of the buffer, and destination addressing data.  The actual format and data contents vary based on the hardware implementation.
+
+NICs have limited resources.  Only the most scalable, high-performance applications likely need to be concerned with utilizing NIC hardware optimally.  Such applications are important, and a specific focus of OFI.  Managing NIC resources is often handled by a resource manager application, which is responsible for allocating systems to competing applications, among other activities.
+
+Supporting applications that wish to make optimal use of hardware requires that hardware related abstractions be exposed to the application.  Such abstractions cannot require a specific hardware implementation, and care must be taken to ensure that the resulting API is still usable by developers unfamiliar with dealing with such low level details.
+
 ### Sharing Command Queues
+
+By exposing the transmit and receive queues to the application, we open the possibility for the application that makes use of multiple endpoints to determine how those queues might be shared.  We talked about the benefits of sharing a receive queue among endpoints.  The benefits of sharing transmit queues are not as obvious.
+
+An application that uses more addressable endpoints than there are transmit queues will need to share transmit queues among the endpoints.  By controlling which endpoint uses which transmit queue, the application can prioritize traffic.  A transmit queue can also be configured to optimize for a specific type of data transfer, such as large transfers only.
+
+From the perspective of a software API, sharing transmit or receive queues implies exposing those constructs to the application, and allowing them to be associated with different endpoint addresses.
+
 ### Multiple Queues
+
+The opposite of a shared command queue are endpoints that have multiple queues.  An application that can take advantage of multiple transmit or receive queues can increase parallel handling of messages without synchronization issues.  Being able to use multiple command queues through a single endpoint has advantages over using multiple endpoints.  Multiple endpoints require separate addresses, which increases memory use.  A single endpoint with multiple queues can continue to expose a single address, while taking full advantage of available NIC resources.
+
 ## Progress Model Considerations
-## Multi-Threading Synchronization
+
+An aspect of the sockets programming interface that developers often don't consider is the location of the protocol implementation.  This is usually handled by the operating system kernel.  The network stack is responsible for handling flow control messages, timing out transfers, retransmitting unacknowledged transfers, processing received data, and sending acknowledgments.  This processing requires that the network stack consume CPU cycles.  Portions of that processing can be done within the context of the application thread, but much must be handled by kernel threads dedicated to network processing.
+
+By moving the network processing directly into the application process, we need to be concerned with how network communication makes forward progress.  For example, how and when are acknowledgements sent?  How are timeouts and message retransmissions handled?  The progress model defines this behavior, and it depends on how much of the network processing has been offloaded onto the NIC.
+
+More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application threads.  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgements, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.
+
 ## Ordering
+
+Network ordering is a complex subject.  With TCP sockets, data is send and received in the same order.  Buffers are re-usable by the application immediately upon returning from a function call.  As a result, ordering is simple to understand and use.  UDP sockets complicate things slightly.  With UDP sockets, messages may be received out of order from how they were sent.  In practice, this often doesn't occur, particularly, if the application only communicates over a local area network, such as Ethernet.
+
+With our evolving network API, there are situations where exposing different order semantics can improve performance.
+
 ### Messages
-### Completions
+
+UDP sockets allow messages to arrive out of order because each message is routed from the sender to the receiver independently.  This allows packets to take different network paths, to avoid congestion or take advantage of multiple network links for improved bandwidth.  We would like to take advantage of the same features in those cases where the application doesn't care in which order messages arrive.
+
+Unlike UDP sockets, however, our definition of message ordering is more subtle.  UDP messages are small, MTU sized packets.  In our case, messages may be gigabytes in size.  We define message ordering to indicate whether the start of each message is processed in order or out of order.  This is related to, but separate from the order of how the message payload is received.
+
+An example will help clarify this distinction.  Suppose that an application has posted two messages to its receive queue.  The first receive points to a 4 KB buffer.  The second receive points to a 64 KB buffer.  The sender will transmit a 4 KB message followed by a 64 KB message.  If messages are processed in order, then the 4 KB send will match with the 4 KB received, and the 64 KB send will match with the 64 KB receive.  However, is messages can be processed out of order, then the sends and receive can mismatch, resulting in the 64 KB send being truncated.
+
+In this example, we're not concerned with what order the data is received in.  The 64 KB send could be broken in 64 1-KB transfers that take different routes to the destination.  So, bytes 2k-3k could be received before bytes 1k-2k.  Message ordering is not concerned with ordering _within_ a message, only _between_ messages.  With ordered messages, the messages themselves need to be processed in order.
+
+The more relaxed message ordering can be the more optimizations that the network stack can use to transfer the data.  However, the application must be aware of message ordering semantics, and be able to select the desired semantic for its needs.  For the purposes of this section, messages refers to transport level operations, which includes RDMA and similar operations (some of which have not yet been discussed).
+
 ### Data
+
+Data ordering refers to the receiving and placement of data both within _and_ between messages.  Data ordering is most important to messages that can update the same target memory buffer.  For example, imagine an application that writes a series of database records directly into a peer memory location.  Data ordering, combined with message ordering, ensures that the data from the second write updates memory after the first write completes.  The result is that the memory location will contain the records carried in the second write.
+
+Enforcing data ordering between messages requires that the messages themselves be ordered.  Data ordering can apply within a single message.  Intra-message data ordering indicates that the data for a single message is received in order.  Some applications use this feature to spin reading the last byte of a receive buffer.  Once the byte changes, the application knows that the operation has completed and all earlier data has been received.  (Note that while such behavior is interesting for benchmark purposes, using such a feature in this way is strongly discouraged.  It is not portable between networks or platforms.) 
+
+### Completions
+
+Completion ordering refers to the sequence that asynchronous operations report their completion to the application.  Typically, unreliable data transfer will naturally complete in the order that they are submitted to a transit queue.  Each operation is transmitted to the network, with the completion occuring immediately after.  For reliable data transfers, an operation cannot complete until it has been acknowledged by the peer.  Since ack packets can be lost or possibly take different paths through the network, operations can be marked as completed out of order.  Out of order acks is more likely if messages can be processed out of order.
+
+Asynchronous interfaces requires that the application track their outstanding requests.  Handling out of order completions can increase application complexity, but it does allow for optimizing network utilization.
 
 # OFI Architecture
 ## Framework versus Provider
