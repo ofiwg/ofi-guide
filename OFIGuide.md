@@ -405,6 +405,13 @@ From the perspective of a software API, sharing transmit or receive queues impli
 The opposite of a shared command queue are endpoints that have multiple queues.  An application that can take advantage of multiple transmit or receive queues can increase parallel handling of messages without synchronization issues.  Being able to use multiple command queues through a single endpoint has advantages over using multiple endpoints.  Multiple endpoints require separate addresses, which increases memory use.  A single endpoint with multiple queues can continue to expose a single address, while taking full advantage of available NIC resources.
 
 ## Progress Model Considerations
+
+An aspect of the sockets programming interface that developers often don't consider is the location of the protocol implementation.  This is usually handled by the operating system kernel.  The network stack is responsible for handling flow control messages, timing out transfers, retransmitting unacknowledged transfers, processing received data, and sending acknowledgments.  This processing requires that the network stack consume CPU cycles.  Portions of that processing can be done within the context of the application thread, but much must be handled by kernel threads dedicated to network processing.
+
+By moving the network processing directly into the application process, we need to be concerned with how network communication makes forward progress.  For example, how and when are acknowledgements sent?  How are timeouts and message retransmissions handled?  The progress model defines this behavior, and it depends on how much of the network processing has been offloaded onto the NIC.
+
+More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application threads.  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgements, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.
+
 ## Multi-Threading Synchronization
 ## Ordering
 ### Messages
