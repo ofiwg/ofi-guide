@@ -444,7 +444,7 @@ Asynchronous interfaces requires that the application track their outstanding re
 
 # OFI Architecture
 
-Libfabric is architected to support process direct I/O. Process direct I/O, historically referred to as RDMA, allows an application to access network resources without operating system interventions. Data transfers can occur between networking hardware and application memory with minimal software overhead. Although libfabric supports process direct I/O, it does not mandate any implementation or require operating system bypass.
+Libfabric is well architected to support the previously discussed features, with specific focus on exposing process direct I/O. Process direct I/O, historically referred to as RDMA, allows an application to access network resources without operating system interventions. Data transfers can occur between networking hardware and application memory with minimal software overhead. Although libfabric supports process direct I/O, it does not mandate any implementation or require operating system bypass.
 
 The following diagram highlights the general architecture of the interfaces exposed by libfabric. For reference, the diagram shows libfabric in reference to a NIC. This is provided as an example only of how process direct I/O may be supported.
 
@@ -456,7 +456,9 @@ OFI is divided into two separate components. The main component is the OFI frame
 
 ## Control services
 
-These are used by applications to discover information about the types of communication services are available in the system. For example, discovery will indicate what fabrics are reachable from the local node, and what sort of communication each provides.
+Control services are used by applications to discover information about the types of communication services are available in the system. For example, discovery will indicate what fabrics are reachable from the local node, and what sort of communication each provides.
+
+In terms of implementation, control services are handled primarily by a single API, fi_getinfo().  That interface is used not just to discover what features are available in the system, but also how they might best be used by an application desiring maximum performance.
 
 ## Communication services
 
@@ -472,7 +474,7 @@ These are sets of interfaces designed around different communication paradigms. 
 
 There are four basic data transfer interface sets. Message queues expose the ability to send and receive data with message boundaries being maintained. Message queues act as FIFOs, with sent messages matched with receive buffers in the order that messages are received. Tag matching is similar to message queues in that it maintains message boundaries. Tag matching differs from message queues in that received messages are directed into buffers based on small steering tags that are carried in the sent message.
 
-RMA stands for remote memory access. RMA transfers allow an application to write data directly into a specific memory location in a target process, or to read memory from a specific address at the target process and return the data into a local buffer. Atomic operations are similar to RMA transfers, in that they allow direct access to the memory on the target process. Atomic operations allow for manipulation of the memory, such as incrementing the value found in memory. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed. 
+RMA stands for remote memory access. RMA transfers allow an application to write data directly into a specific memory location in a target process, or to read memory from a specific address at the target process and return the data into a local buffer. Atomic operations are similar to RMA transfers, in that they allow direct access to the memory on the target process. Atomic operations allow for manipulation of the memory, such as incrementing the value found in memory. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed.
 
 ## Memory registration
 
