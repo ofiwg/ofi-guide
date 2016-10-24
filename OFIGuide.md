@@ -509,7 +509,7 @@ Address Vectors: Address vectors are used by connectionless endpoints. They map 
 
 The following diagram highlights the general usage behind connection-oriented communication.
 
-<diagram>
+![Connecting](/assets/connections.PNG)
 
 Connections require the use of both passive and active endpoints. In order to establish a connection, an application must first create a passive endpoint and associate it with an event queue. The event queue will be used to report the connection management events. The application then calls listen on the passive endpoint. A single passive endpoint can be used to form multiple connections.
 
@@ -523,7 +523,7 @@ OFI does not define the connection establishment protocol, but does support a tr
 
 Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication.
 
-<diagram>
+![Connectionless](/assets/connectionless.PNG)
 
 OFI requires the addresses of peer endpoints be inserted into a local addressing table, or address vector, before data transfers can be initiated against the remote endpoint. Address vectors abstract fabric specific addressing requirements and avoid long queuing delays on data transfers when address resolution is needed. For example, IP addresses may need to be resolved into Ethernet MAC addresses. Address vectors allow this resolution to occur during application initialization time. OFI does not define how an address vector be implemented, only its conceptual model.
 
@@ -534,7 +534,7 @@ Address vectors may be associated with an event queue. After an address is inser
 
 Endpoints represent communication portals, and all data transfer operations are initiated on endpoints. OFI defines the conceptual model for how endpoints are exposed to applications, as demonstrated in the diagrams below.
 
-<diagram>
+![Endpoint](/assets/libfabric-ep.png)
 
 Endpoints are usually associated with a transmit context and a receive context. Transmit and receive contexts are often implemented using hardware queues that are mapped directly into the process’s address space, though OFI does not require this implementation. Although not shown, an endpoint may be configured only to transmit or receive data. Data transfer requests are converted by the underlying provider into commands that are inserted into transmit and/or receive contexts.
 
@@ -544,7 +544,7 @@ Endpoints are also associated with completion queues. Completion queues are used
 
 A more advanced usage model of endpoints that allows for resource sharing is shown below.
 
-<diagram>
+![Shared Contexts](/assets/libfabric-shared-ctx.png)
 
 Because transmit and receive contexts may be associated with limited hardware resources, OFI defines mechanisms for sharing contexts among multiple endpoints. The diagram above shows two endpoints each sharing transmit and receive contexts. However, endpoints may share only the transmit context or only the receive context or neither. Shared contexts allow an application or resource manager to prioritize where resources are allocated and how shared hardware resources should be used.
 
@@ -556,7 +556,7 @@ Completions are still associated with the endpoints, with each endpoint being as
 
 The final endpoint model is known as a scalable endpoint. Scalable endpoints allow a single endpoint to take advantage of multiple underlying hardware resources.
 
-<diagram>
+![Scalable Endpoints](/assets/libfabric-scal-ep.png)
 
 Scalable endpoints have multiple transmit and/or receive contexts. Applications can direct data transfers to use a specific context, or the provider can select which context to use. Each context may be associated with its own completion queue. Scalable contexts allow applications to separate resources to avoid thread synchronization or data ordering restrictions.
 
