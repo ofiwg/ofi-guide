@@ -448,7 +448,7 @@ Libfabric is architected to support process direct I/O. Process direct I/O, hist
 
 The following diagram highlights the general architecture of the interfaces exposed by libfabric. For reference, the diagram shows libfabric in reference to a NIC. This is provided as an example only of how process direct I/O may be supported.
 
-<diagram>
+![Architecture](/assets/libfabric-arch.png)
 
 ## Framework versus Provider
 
@@ -480,7 +480,7 @@ RMA stands for remote memory access. RMA transfers allow an application to write
 
 Interfaces exposed by OFI are associated with different objects. The following diagram shows a high-level view of the parent-child relationships. 
 
-<diagram>
+![Object Model](/assets/libfabric-objmod.png)
 
 Fabric: A fabric represents a collection of hardware and software resources that access a single physical or virtual network. For example, a fabric may be a single network subnet. All network ports on a system that can communicate with each other through the fabric belong to the same fabric domain. A fabric shares network addresses and can span multiple providers.
 
