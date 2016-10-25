@@ -468,9 +468,13 @@ Control services are used by applications to discover information about the type
 
 In terms of implementation, control services are handled primarily by a single API, fi_getinfo().  Modeled very loosely on getaddrinfo(), it is used not just to discover what features are available in the system, but also how they might best be used by an application desiring maximum performance.
 
+Control services themselves are not considered performance critical.  However, the information exchanged between an application and the providers must be expressive enough to indicate the most performant way to access the network.  Those details must be balanced with ease of use.  As a result, the fi_getinfo() call provides the ability to access complex network details, while allowing an application to ignore them if desired.
+
 ## Communication services
 
 Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
+
+The best match to socket routines would be connect(), bind(), listen(), and accept().  In fact the connection management calls are modeled after those functions, but with improved support for the asynchronous nature of the calls.  For performance and scalability reasons, connectionless endpoints use a unique model, that is not based on sockets or other network interfaces.  Address vectors are discussed in detail later, but target applications needing to talk with potentially thousands to millions of peers.  For applications communicating with a handful of peers, address vectors can slightly complicate initialization for connectionless endpoints.
 
 ## Completion services
 
