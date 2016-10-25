@@ -478,7 +478,9 @@ The best match to socket routines would be connect(), bind(), listen(), and acce
 
 ## Completion services
 
-OFI exports asynchronous interfaces. Completion services are used to report the results of submitted operations. Completions may be reported using event queues, which provide details about the operation that completed. Or, completions may be reported using lower-impact counters that simply return the number of operations that have completed. 
+OFI exports asynchronous interfaces. Completion services are used to report the results of submitted operations. Completions may be reported using the cleverly named completions queues, which provide details about the operation that completed. Or, completions may be reported using lower-impact counters that simply return the number of operations that have completed.
+
+Completion services are designed with high-performance, low-latency in mind.  The calls map directly into the providers, and data structures are defined to minimize memory writes and cache impact.
 
 ## Data transfer services
 
