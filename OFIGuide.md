@@ -458,11 +458,11 @@ OFI is divided into two separate components. The main component is the OFI frame
 
 Control services are used by applications to discover information about the types of communication services are available in the system. For example, discovery will indicate what fabrics are reachable from the local node, and what sort of communication each provides.
 
-In terms of implementation, control services are handled primarily by a single API, fi_getinfo().  That interface is used not just to discover what features are available in the system, but also how they might best be used by an application desiring maximum performance.
+In terms of implementation, control services are handled primarily by a single API, fi_getinfo().  Modeled very loosely on getaddrinfo(), it is used not just to discover what features are available in the system, but also how they might best be used by an application desiring maximum performance.
 
 ## Communication services
 
-These interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
+Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
 
 ## Completion services
 
@@ -470,13 +470,18 @@ OFI exports asynchronous interfaces. Completion services are used to report the 
 
 ## Data transfer services
 
-These are sets of interfaces designed around different communication paradigms. Although shown outside the data transfer services, triggered operations are strongly related to the data transfer operations.
+Applications have needs of different data transfer semantics.  Thed data transfer services in OFI are designed around different communication paradigms. Although shown outside the data transfer services, triggered operations are strongly related to the data transfer operations.
 
-There are four basic data transfer interface sets. Message queues expose the ability to send and receive data with message boundaries being maintained. Message queues act as FIFOs, with sent messages matched with receive buffers in the order that messages are received. Tag matching is similar to message queues in that it maintains message boundaries. Tag matching differs from message queues in that received messages are directed into buffers based on small steering tags that are carried in the sent message.
+There are four basic data transfer interface sets. Message queues expose the ability to send and receive data with message boundaries being maintained. Message queues act as FIFOs, with sent messages matched with receive buffers in the order that messages are received
 
-RMA stands for remote memory access. RMA transfers allow an application to write data directly into a specific memory location in a target process, or to read memory from a specific address at the target process and return the data into a local buffer. Atomic operations are similar to RMA transfers, in that they allow direct access to the memory on the target process. Atomic operations allow for manipulation of the memory, such as incrementing the value found in memory. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed.
+Tag matching is similar to message queues in that it maintains message boundaries. Tag matching differs from message queues in that received messages are directed into buffers based on small steering tags that are carried in the sent message.  This allows a receiver to post buffers labeled 1, 2, 3, and so forth, with sends labeled respectively.  The benefit is that send 1 will match with receive buffer 1, independent of how send operations may be transmitted or re-ordered by the network.
+
+RMA stands for remote memory access. RMA transfers allow an application to write data directly into a specific memory location in a target process, or to read memory from a specific address at the target process and return the data into a local buffer.  RMA is essentially equivalent to RDMA; the exception being that RDMA defines a specific implementation of RMA.
+
+Atomic operations are similar to RMA transfers, in that they allow direct access to the memory on the target process. Atomic operations allow for manipulation of the memory, such as incrementing the value found in memory. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed.
 
 ## Memory registration
+
 
 # Object Model
 
