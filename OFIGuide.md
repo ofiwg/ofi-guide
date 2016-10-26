@@ -630,6 +630,15 @@ Conceptually, on the transmit side, messages are posted to a send context.  The 
 In the default case, OFI defines ordering semantics such that messages 1, 2, 3, etc. from the sender are received in the same order at the target.  Relaxed ordering semantics is an optimization technique that applications can opt into in order to improve network performance and utilization.
 
 ## Tagged messages
+
+Tagged messages are similar to message transfers except that the messages carry one additional piece of information, a message tag.  Tags are application defined values that are part of the message transfer protocol and are used to route packets at the receiver.  At a high level, they are roughly similar to sequence numbers or message ids.  The difference is that tag values are set by the application, may be any value, and duplicate tag values are allowed.
+
+Each sent message carries a single tag value, which is used when selecting a receive buffer into which the data is copied.  On the receiving side, message buffers are also marked with a tag.  Messages that arrive from the network search through the posted receive messages until a matching tag is found.  Tags allow messages to be placed into overlapping groups.
+
+Tags are often used to identify virtual communication groups or roles.  For example, one tag value may be used to identify a group of systems that contain input data into a program.  A second tag value could identify the systems involved in the processing of the data.  And a third tag may identify systems responsible for gathering the output from the processing.  (This is purely a hypothetical example for illustrative purposes only). Moreover, tags may carry additional data about the type of message being used by each group.  For example, messages could be separated based on whether the context carries control or data information.
+
+
+
 ## RMA
 ## Atomic operations
 
