@@ -637,9 +637,23 @@ Each sent message carries a single tag value, which is used when selecting a rec
 
 Tags are often used to identify virtual communication groups or roles.  For example, one tag value may be used to identify a group of systems that contain input data into a program.  A second tag value could identify the systems involved in the processing of the data.  And a third tag may identify systems responsible for gathering the output from the processing.  (This is purely a hypothetical example for illustrative purposes only). Moreover, tags may carry additional data about the type of message being used by each group.  For example, messages could be separated based on whether the context carries control or data information.
 
+In practice, message tags are typically divided into fields.  For example, the upper 16 bits of the tag may indicate a virtual group, with the lower 16 bits identifying the message purpose.  The tag message interface in OFI is designed around this usage model.  Each sent message carries exactly one tag value, specified through the API.  At the receiver, buffers are associated with both a tag value and a mask.  The mask is applied to both the send and receive tag values (using a bitwise AND operation).  If the resulting values match, then the tags are said to match.  The received data is then placed into the matched buffer.
 
+For performance reasons, the mask is specified as 'ignore' bits. Although this is backwards from how many developers think of a mask (where the bits that are valid would be set to 1), the definition ends up mapping well with applications.  The actual operation performed when matching tags is:
+
+```
+send_tag | ignore == recv_tag | ignore
+/* this is equivalent to:
+ * send_tag & ~ignore == recv_tag & ~ignore
+ */
+```
+
+Tagged messages are equivalent of message transfers if a single tag value is used.  But tagged messages require that the receiver perform the matching operation at the target, which can impact performance versus untagged messages.
 
 ## RMA
+
+
+
 ## Atomic operations
 
 # Fabric Interfaces
