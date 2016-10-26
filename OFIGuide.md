@@ -580,8 +580,7 @@ OFI requires the addresses of peer endpoints be inserted into a local addressing
 
 Address vectors may be associated with an event queue. After an address is inserted into an address vector and the fabric specific details have been resolved, a completion event is generated on the event queue. Data transfer operations against that address are then permissible on active endpoints that are associated with the address vector. Connectionless endpoints must be associated with an address vector. 
 
-# Data Transfers
-## Endpoints
+# Endpoints
 
 Endpoints represent communication portals, and all data transfer operations are initiated on endpoints. OFI defines the conceptual model for how endpoints are exposed to applications, as demonstrated in the diagrams below.
 
@@ -591,7 +590,7 @@ Endpoints are usually associated with a transmit context and a receive context. 
 
 Endpoints are also associated with completion queues. Completion queues are used to report the completion of asynchronous data transfer operations. An endpoint may direct completed transmit and receive operations to separate completion queues, or the same queue (not shown)
 
-### Shared Contexts
+## Shared Contexts
 
 A more advanced usage model of endpoints that allows for resource sharing is shown below.
 
@@ -601,9 +600,10 @@ Because transmit and receive contexts may be associated with limited hardware re
 
 Completions are still associated with the endpoints, with each endpoint being associated with their own completion queue(s).
 
-#### Receive Contexts
-#### Transmit Contexts
-### Scalable Endpoints
+### Receive Contexts
+### Transmit Contexts
+
+## Scalable Endpoints
 
 The final endpoint model is known as a scalable endpoint. Scalable endpoints allow a single endpoint to take advantage of multiple underlying hardware resources.
 
@@ -611,6 +611,11 @@ The final endpoint model is known as a scalable endpoint. Scalable endpoints all
 
 Scalable endpoints have multiple transmit and/or receive contexts. Applications can direct data transfers to use a specific context, or the provider can select which context to use. Each context may be associated with its own completion queue. Scalable contexts allow applications to separate resources to avoid thread synchronization or data ordering restrictions.
 
+# Data Transfers
+
+Obviously, the goal of network communication is to transfer data between systems. In the same way that sockets defines different data transfer semantics for TCP versus UDP sockets (streaming versus datagram messages), OFI defines different data transfer semantics. However, unlike sockets, OFI describes how a single endpoint may apply different semantics, even when communicating with the same peer.
+
+OFI defines separate sets of API for the different data transfer semantics; although, there are strong similarities between the API sets.  The differences are the result of the parameters needed to invoke each type of data transfer.
 
 ## Message transfers
 ## Tagged messages
