@@ -652,7 +652,13 @@ Tagged messages are equivalent of message transfers if a single tag value is use
 
 ## RMA
 
+RMA operations are architected such that they can require no processing at the RMA target.  NICs which offload transport functionality can perform RMA operations without impacting host processing.  RMA write operations transmit data from the initiator to the target.  The memory location where the data should be written is carried within the transport message itself.
 
+RMA read operations fetch data from the target system and transfer it back to the initiator of the request, where it is copied into memory.  This too can be done without involving the host processor at the target system when the NIC supports transport offloading.
+
+The advantage of RMA operations is that they decouple the processing of the peers.  Data can be placed or fetched whenever the initiator is ready without necessarily impacting the peer process.
+
+Because RMA operations allow a peer to directly access the memory of a process, additional protection mechanisms are used to prevent unintentional or unwanted access.  RMA memory that is updated by a write operation or is fetched by a read operation must be registered for access with the correct permissions specified.
 
 ## Atomic operations
 
