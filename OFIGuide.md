@@ -613,11 +613,22 @@ Scalable endpoints have multiple transmit and/or receive contexts. Applications 
 
 # Data Transfers
 
-Obviously, the goal of network communication is to transfer data between systems. In the same way that sockets defines different data transfer semantics for TCP versus UDP sockets (streaming versus datagram messages), OFI defines different data transfer semantics. However, unlike sockets, OFI describes how a single endpoint may apply different semantics, even when communicating with the same peer.
+Obviously, the goal of network communication is to transfer data between systems. In the same way that sockets defines different data transfer semantics for TCP versus UDP sockets (streaming versus datagram messages), OFI defines different data transfer semantics. However, unlike sockets, OFI allows different semantics over a single endpoint, even when communicating with the same peer.
 
 OFI defines separate sets of API for the different data transfer semantics; although, there are strong similarities between the API sets.  The differences are the result of the parameters needed to invoke each type of data transfer.
 
 ## Message transfers
+
+Message transfers are most similar to UDP datagram transfers.  The sender requests that data be transferred as a single transport operation to a peer.  Even if the data is referenced using an I/O vector, it is treated as a single logical unit.  The data is placed into a waiting receive buffer at the peer.  Unlike UDP sockets, message transfers may be reliable or unreliable, and many providers support message transfers that are  gigabytes in size.
+
+Message transfers are usually invoked using API calls that contain the string "send" or "recv".  As a result they may be referred to simply as sends or receives.
+
+Message transfers involve the target process posting memory buffers to the receive context of its endpoint.  When a message arrives from the network, a receive buffer is removed from the Rx context, and the data is copied from the network into the receive buffer.  Messages are matched with posted receives in the order that they are received.  Note that this may differ from the order that messages are sent, depending on the transmit side's ordering semantics.  Furthermore, received messages may complete out of order.  For instance, short messages could complete before larger messages.  Completion ordering semantics indicate the order that posted receive operations complete.
+
+Conceptually, on the transmit side, messages are posted to a send context.  The network processes messages from the send context, packetizing the data into outbound messages.  Although many implementations process the send context in order (i.e. the send context is a true queue), ordering guarantees determine the actual processing order.  For example, sent messages may be copied to the network out of order if targeting different peers.
+
+In the default case, OFI defines ordering semantics such that messages 1, 2, 3, etc. from the sender are received in the same order at the target.  Relaxed ordering semantics is an optimization technique that applications can opt into in order to improve network performance and utilization.
+
 ## Tagged messages
 ## RMA
 ## Atomic operations
