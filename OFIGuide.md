@@ -470,19 +470,19 @@ In terms of implementation, control services are handled primarily by a single A
 
 Control services themselves are not considered performance critical.  However, the information exchanged between an application and the providers must be expressive enough to indicate the most performant way to access the network.  Those details must be balanced with ease of use.  As a result, the fi_getinfo() call provides the ability to access complex network details, while allowing an application to ignore them if desired.
 
-## Communication services
+## Communication Services
 
 Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
 
 The best match to socket routines would be connect(), bind(), listen(), and accept().  In fact the connection management calls are modeled after those functions, but with improved support for the asynchronous nature of the calls.  For performance and scalability reasons, connectionless endpoints use a unique model, that is not based on sockets or other network interfaces.  Address vectors are discussed in detail later, but target applications needing to talk with potentially thousands to millions of peers.  For applications communicating with a handful of peers, address vectors can slightly complicate initialization for connectionless endpoints.
 
-## Completion services
+## Completion Services
 
 OFI exports asynchronous interfaces. Completion services are used to report the results of submitted operations. Completions may be reported using the cleverly named completions queues, which provide details about the operation that completed. Or, completions may be reported using lower-impact counters that simply return the number of operations that have completed.
 
 Completion services are designed with high-performance, low-latency in mind.  The calls map directly into the providers, and data structures are defined to minimize memory writes and cache impact.  Completion services do not have corresponding socket APIs.
 
-## Data transfer services
+## Data Transfer Services
 
 Applications have needs of different data transfer semantics.  The data transfer services in OFI are designed around different communication paradigms. Although shown outside the data transfer services, triggered operations are strongly related to the data transfer operations.
 
@@ -494,7 +494,7 @@ RMA stands for remote memory access. RMA transfers allow an application to write
 
 Atomic operations are often viewed as a type of extended RMA transfer. They allow direct access to the memory on the target process. The benefit of atomic operations is that they allow for manipulation of the memory, such as incrementing the value found at the target buffer.  So, where RMA can write the value X to a remote memory buffer, atomics can change the value of the remote memory buffer, say Y, to Y + 1. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed.
 
-## Memory registration
+## Memory Registration
 
 Memory registration is the security mechanism used to grant a remote peer access to local memory buffers.  Registered memory regions associate memory buffers with permissions granted for access by fabric resources. A memory buffer must be registered before it can be used as the target of an RMA or atomic data transfer.  Memory registration supports a simple protection mechanism.  After a memory buffer has been registered, that registration request (buffer's address, buffer length, and access permission) is given a registration key.  Peers that issue RMA or atomic operations against that memory buffer must provide this key as part of their operation.  This helps protects against unintentional accesses to the region. (Memory registration can help guard against malicious access, but it is often too weak by itself to ensure system isolation.  Other, fabric specific, mechanisms protect against malicious access.  Those mechanisms are outside of the scope of the libfabric API.)
 
@@ -520,7 +520,7 @@ A domain represents a logical connection into a fabric. For example, a domain ma
 
 Passive endpoints are used by connection-oriented protocols to listen for incoming connection requests. Passive endpoints often map to software constructs and may span multiple domains.  They are best represented by a listening socket.  Unlike the socket API, however, in which an allocated socket may be used with either a connect() or listen() call, a passive endpoint may only be used with a listen call.
 
-## Event Queues:
+## Event Queues
 
 EQs are used to collect and report the completion of asynchronous operations and events. Event queues handle _control_ events, which are not directly associated with data transfer operations. The reason for separating control events from data transfer events is for performance reasons.  Control events usually occur during an application's initialization phase, or at a rate that's several orders of magnitude smaller than data transfer events. Event queues are most commonly used by connection-oriented protocols for notification of connection request or established events.  A single event queue may combine multiple hardware queues with a software queue and expose them as a single abstraction.
 
@@ -553,9 +553,12 @@ Memory regions describe application’s local memory buffers. In order for fabri
 Address vectors are used by connectionless endpoints. They map higher level addresses, such as IP addresses, which may be more natural for an application to use, into fabric specific addresses. The use of address vectors allows providers to reduce the amount of memory required to maintain large address look-up tables, and eliminate expensive address resolution and look-up methods during data transfer operations. 
 
 # Communication Model
+
+OFI supports three main communication endpoint types: reliable-connected, unreliable datagram, and reliable-unconnected. (The fourth option, unreliable-connected is unused by applications, so is not included as part of the current implementation). Communication setup is based on whether the endpoint is connected or unconnected.  Reliability is a feature of the endpoint's data transfer protocol.
+
 ## Connected Communications
 
-The following diagram highlights the general usage behind connection-oriented communication.
+The following diagram highlights the general usage behind connection-oriented communication. Connected communication is based on the flow used to connect TCP sockets, with improved asynchronous support.
 
 ![Connecting](/assets/connections.PNG)
 
@@ -569,7 +572,7 @@ OFI does not define the connection establishment protocol, but does support a tr
 
 ## Connectionless Communications
 
-Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication.
+Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication. Connectionless communication setup differs from UDP sockets in that it requires that the remote addresses be stored with libfabric.
 
 ![Connectionless](/assets/connectionless.PNG)
 
