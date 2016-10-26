@@ -506,23 +506,41 @@ Interfaces exposed by OFI are associated with different objects. The following d
 
 ![Object Model](/assets/libfabric-objmod.png)
 
-Fabric: A fabric represents a collection of hardware and software resources that access a single physical or virtual network. For example, a fabric may be a single network subnet or cluster. All network ports on a system that can communicate with each other through the fabric belong to the same fabric. A fabric shares network addresses and can span multiple providers.
+## Fabric
 
-Domain: A domain represents a logical connection into a fabric. For example, a domain may map to a physical or virtual NIC. A domain defines the boundary within which fabric resources may be associated. Each domain belongs to a single fabric.
+A fabric represents a collection of hardware and software resources that access a single physical or virtual network. For example, a fabric may be a single network subnet or cluster. All network ports on a system that can communicate with each other through the fabric belong to the same fabric. A fabric shares network addresses and can span multiple providers.
 
-Passive Endpoint: Passive endpoints are used by connection-oriented protocols to listen for incoming connection requests. Passive endpoints often map to software constructs and may span multiple domains.  They are best represented by a listening socket.  Unlike the socket API, in which an allocated socket may be used with either a connect() or listen() call, a passive endpoint may only be used with a listen call.
+Fabrics are the top level object from which other objects are allocated.
 
-Event Queues: EQs are used to collect and report the completion of asynchronous operations and events. Event queues handle _control_ events, which are not directly associated with data transfer operations. For example, connection requests and asynchronous errors that are not associated with a specific data transfer are reported using event queues. The reason for separating control events from data transfer events is for performance reasons.  Control events usually occur during an application's initialization phase, or at a rate that's several orders of magnitude smaller than data transfer events. Event queues are most commonly used by connection-oriented protocols for notification of connection request or established events, and often contain some level of software implementation.
+## Domain
 
-Wait Sets: The intended objective of a wait set is to reduce system resources used for signaling events. For example, a wait set may allocate a single file descriptor.  All fabric resources that are associated with the wait set will signal that file descriptor when an event occurs. The advantage is that the number of opened file descriptors is greatly reduced.   The closest operating system semantic would be the Linux epoll construct.  The difference is that a wait set does not merely multiplex file descriptors to another file descriptor, but allows for their elimination completely.  Wait sets allow a single underlying wait object to be signaled whenever a specified condition occurs on an associated event queue, completion queue, or counter.
+A domain represents a logical connection into a fabric. For example, a domain may correspond to a physical or virtual NIC. Because domains often correlate to a single NIC, a domain defines the boundary within which other resources may be associated.  For example, completion queues and active endpoints must be part of the same domain.
 
-Active Endpoint: Active endpoints are data transfer communication portals.  Active endpoints are used to perform data transfers, and are conceptually similar to a connected TCP or UDP socket. Active endpoints are often associated with a single hardware NIC.
+## Passive Endpoint
 
-Completion Queue: Completion queues are high-performance queues used to report the completion of data transfer operations. Unlike fabric event queues, completion queues are often associated with a single hardware NIC, and may be implemented entirely in hardware.
+Passive endpoints are used by connection-oriented protocols to listen for incoming connection requests. Passive endpoints often map to software constructs and may span multiple domains.  They are best represented by a listening socket.  Unlike the socket API, however, in which an allocated socket may be used with either a connect() or listen() call, a passive endpoint may only be used with a listen call.
 
-Completion Counter: Completion counters are used to report the number of completed data transfer operations. Completion counters are considered lighter weight than completion queues, in that a completion simply increments a counter, rather than placing an entry into a queue.
+## Event Queues:
 
-Poll Set: OFI allows providers to use an application’s thread to process asynchronous requests. This can provide performance advantages for providers that use software to progress the state of a data transfer. Poll sets allow an application to group together multiple objects, such that progress can be driven across all associated data transfers. In general, poll sets are used to simplify applications where manual progress model is employed.
+EQs are used to collect and report the completion of asynchronous operations and events. Event queues handle _control_ events, which are not directly associated with data transfer operations. The reason for separating control events from data transfer events is for performance reasons.  Control events usually occur during an application's initialization phase, or at a rate that's several orders of magnitude smaller than data transfer events. Event queues are most commonly used by connection-oriented protocols for notification of connection request or established events.  A single event queue may combine multiple hardware queues with a software queue and expose them as a single abstraction.
+
+## Wait Sets
+
+The intended objective of a wait set is to reduce system resources used for signaling events. For example, a wait set may allocate a single file descriptor.  All fabric resources that are associated with the wait set will signal that file descriptor when an event occurs. The advantage is that the number of opened file descriptors is greatly reduced.   The closest operating system semantic would be the Linux epoll construct.  The difference is that a wait set does not merely multiplex file descriptors to another file descriptor, but allows for their elimination completely.  Wait sets allow a single underlying wait object to be signaled whenever a specified condition occurs on an associated event queue, completion queue, or counter.
+
+## Active Endpoint
+
+Active endpoints are data transfer communication portals.  Active endpoints are used to perform data transfers, and are conceptually similar to a connected TCP or UDP socket. Active endpoints are often associated with a single hardware NIC,  with the data transfers partially or fully offloaded onto the NIC.
+
+## Completion Queue
+
+Completion queues are high-performance queues used to report the completion of data transfer operations. Unlike event queues, completion queues are often associated with a single hardware NIC, and may be implemented entirely in hardware.  Completion queue interfaces are designed to minimize software overhead.
+
+## Completion Counter
+
+Completion queues are used to report information about which request has completed.  However, some applications use this information simply to track how many requests have completed.  Other details are unnecessary.  Completion counters are optimized for this use case.  Rather than writing entries into a queue, completion counters allow the provider to simply increment a count whenever a completion occurs.
+
+Poll Set: OFI allows providers to use an application’s thread to process asynchronous requests. This can provide performance advantages for providers that use software to progress the state of a data transfer. Poll sets allow an application to group together multiple objects, such that progress can be driven across all associated data transfers. In general, poll sets are used to simplify applications where a manual progress model is employed.
 
 Memory Region: Memory regions describe application’s local memory buffers. In order for fabric resources to access application memory, the application must first grant permission to the fabric provider by constructing a memory region. Memory regions are required for specific types of data transfer operations, such as RMA and atomic operations.
 
