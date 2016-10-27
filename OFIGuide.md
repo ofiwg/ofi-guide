@@ -741,7 +741,15 @@ It is recommended that applications code for only those capabilities required to
 
 ### Mode Bits
 
+Where capability bits represent features desired by applications, mode bits correspond to behavior requested by the provider.  That is, capability bits are top down requests, whereas mode bits are bottom up restrictions.  Mode bits are set by the provider to request that the application use the API in a specific way in order to achieve optimal performance.  Mode bits often imply that the additional work needed by the application will be less overhead than forcing that same implementation down into the provider.  Mode bits arise as a result of hardware implementation restrictions.
 
+An application developer decides which mode bits they want to or can easily support as part of their development process.  Each mode bit describes a particular behavior that the application must follow to use various interfaces.  Applications set the mode bits that they support when calling fi_getinfo().  If a provider requires a mode bit that isn't set, that provider will be skipped by fi_getinfo().  If a provider does not need a mode bit that is set, it will respond to the fi_getinfo() call, with the mode bit cleared.  This indicates that the application does not need to perform the action required by the mode bit.
+
+One of the most common mode bits needed by providers is FI_CONTEXT.  This mode bit requires that applications pass in a libfabric defined data structure (struct fi_context) into any data transfer function.  That structure must remain valid and unused by the application until the data transfer operation completes.  The purpose behind this mode bit is that the struct fi_context provides "scratch" space that the provider can use to track the request.  For example, it may need to insert the request into a linked list, or track the number of times that an outbound transfer has been retried.  Since many applications already track outstanding operations with their own data structure, by embedding the struct fi_context into that same structure, overall performance can be improved.  This avoids the provider needing to allocate and free internal structures for each request.
+
+Continuing with this example, if an application does not already track outstanding requests, then it would leave the FI_CONTEXT mode bit unset.  This would indicate that the provider needs to get and release its own structure for tracking purposes.  In this case, the costs would essentially be the same whether it were done by the application or provider.
+
+For the broadest support of different network technologies, applications should attempt to support as many mode bits as feasible.  Most providers attempt to support applications that cannot support any mode bits, with as small an impact as possible.  However, implementation of mode bit avoidance in the provider will often impact latency tests.
 
 ### Addressing
 
