@@ -772,6 +772,50 @@ struct fi_fabric_attr {
 
 The only field that applications are likely to use directly is the prov_name.  This is a string value that can be used by hints to select a specific provider for use.  On most systems, there will be multiple providers available.  One likely represents the high-performance network attached to the system.  Others are generic providers that may be available on any system, such as the TCP socket and UDP providers.
 
+## Environment Variables
+
+Environment variables are used by providers to configure internal options for optimal performance or memory consumption.  Libfabric provides an interface for querying which environment variables are usable, along with an application to display the information to a command window.  Although environment variables are usually configured by an administrator, an application can query for variables programmatically.
+
+```
+/* APIs to query for supported environment variables */
+enum fi_param_type {
+    FI_PARAM_STRING,
+    FI_PARAM_INT,
+    FI_PARAM_BOOL
+};
+
+struct fi_param {
+    const char *name;
+    enum fi_param_type type;
+    const char *help_string;
+    const char *value;
+};
+
+int fi_getparams(struct fi_param **params, int *count);
+void fi_freeparams(struct fi_param *params);
+```
+
+The modification of environment variables is typically a tuning activity done on larger clusters.  However there are a few values that are useful for developers.  These can be seen by executing the fi_info command.
+
+```
+$ fi_info -e
+# FI_LOG_LEVEL: String
+# Specify logging level: warn, trace, info, debug (default: warn)
+
+# FI_LOG_PROV: String
+# Specify specific provider to log (default: all)
+
+# FI_LOG_SUBSYS: String
+# Specify specific subsystem to log (default: all)
+
+# FI_PROVIDER: String
+# Only use specified provider (default: all available)
+```
+
+Full documentation for these variables is available in the man pages.  Variables beyond these may only be documented directly in the library itself, and available using the 'fi_info -e' command.
+
+The FI_LOG_LEVEL can be used to increase the debug output from libfabric and the providers.  Note that in the release build of libfabric, debug output from data path operations (transmit, receive, and completion processing) may not be available.  The FI_PROVIDER variable can be used to enable or disable specific providers.  This is useful to ensure that a given provider will be used.
+
 # Domains
 ## Attributes
 ## Opening
