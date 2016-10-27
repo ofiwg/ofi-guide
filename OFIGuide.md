@@ -723,10 +723,26 @@ struct fi_info {
 };
 ```
 
-THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing those attributes are unnecessary.  Many applications will only need to deal with a few fields of fi_info.
+THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing those attributes are unnecessary, with only a couple exceptions.  Many applications will only need to deal with a few fields of fi_info, most notably the capability (caps) and mode bits.
 
 ### Capabilities
+
+The fi_info caps field is used to specify the features and services that the application requires of the network.  This field is a bitmask of desired capabilities.  There are capability bits for each of the data transfer services mentioned above: FI_MSG, FI_TAGGED, FI_RMA, and FI_ATOMIC.  Applications should set each bit for each set of operations that it will use.  These bits are often the only bits set by an application.
+
+In some cases, additional bits may be used to limit how a feature will be used.  For example, an application can use the FI_SEND or FI_RECV bits to indicate that it will only send or receive messages, respectively.  Similarly, an application that will only initiate RMA writes, can set the FI_WRITE bit, leaving FI_REMOTE_WRITE unset.  The FI_SEND and FI_RECV bits can be used to restrict the supported message and tagged operations.  By default, if FI_MSG or FI_TAGGED are set, the resulting endpoint will be enabled to both send and receive messages.  Likewise, FI_READ, FI_WRITE, FI_REMOTE_READ, FI_REMOTE_WRITE can restrict RMA and atomic operations.
+
+Capabilities are grouped into two general categories: primary and secondary. Primary capabilities must explicitly be requested by an application, and a provider must enable support for only those primary capabilities which were selected. Secondary capabilities may optionally be requested by an application. If requested, a provider must support the capability or fail the fi_getinfo request. A provider may optionally report non-selected secondary capabilities if doing so would not compromise performance or security.
+
+All of the capabilities discussed so far are primary.  Secondary capabilities mostly deal with features desired by highly scalable, high-performance applications.  For example, the FI_MULTI_RECV secondary capability indicates if the provider can support the multi-receive buffers feature described above.
+
+Because different providers support different sets of capabilities, applications that desire optimal network performance may need to code for a capability being either present or absent.  When present, such capabilities can offer a scalability or performance boost.  When absent, an application may prefer to adjust its protocol or implementation to work around the network limitations.  Although providers can often emulate features, doing so can impact overall performance, including the performance of data transfers that otherwise appear unrelated to the feature in use.  For example, if a provider needs to insert protocol headers into the message stream in order to implement a given capability, the appearance of that header could negatively impact the performance of all transfers. By exposing such limitations to the application, it has better control over how to best emulate the feature or work around its absence.
+
+It is recommended that applications code for only those capabilities required to achieve the best performance.  If a capability would have little to no effect on overall performance, developers should avoid using such features as part of an initial implementation. This will allow the application to work well across the widest variety of hardware.  Application optimizations can then add support for less common features.  To see which features are supported by which providers, see the libfabric [Provider Feature Maxtrix](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix) for the relevant release.
+
 ### Mode Bits
+
+
+
 ### Addressing
 
 # Fabric
