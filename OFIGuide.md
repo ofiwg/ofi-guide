@@ -672,12 +672,58 @@ A full description of the libfabric API is documented in the relevant man pages.
 
 ## Using fi_getinfo
 
-The fi_getinfo() call is the first call that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.
+The fi_getinfo() call is one of the first call that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.  It serves several purposes. First, it abstracts away network implementation and addressing details.  Second, it allows an application to specify which features they require of the network.  Last, it provides a mechanism for a provider to report how an application can use the network in order to achieve the best performance.
 
 ```
+/* API prototypes */
+struct fi_info *fi_allocinfo(void);
+
 int fi_getinfo(int version, const char *node, const char *service,
     uint64_t flags, struct fi_info *hints, struct fi_info **info);
 ```
+
+```
+/* Sample initialization code flow */
+struct fi_info *hints, *info;
+
+hints = fi_allocinfo();
+
+/* hints will point to a cleared fi_info structure
+ * Initialize hints here to request specific network capabilities
+ */
+
+fi_getinfo(FI_VERSION(1, 4), NULL, NULL, 0, hints, &info);
+fi_freeinfo(hints);
+
+/* Use the returned info structure to allocate fabric resources */
+```
+
+The hints parameter is the key for requesting fabric services.  The fi_info structure contains several data fields, plus pointers to a wide variety of attributes.  The fi_allocinfo() call simplifies the creation of a hint structure.  In this example, the application is merely attempting to get a list of what providers are available in the system, and the features that they support.  Note that the API is designed to be extensible.  Versioning information is provided as part of the fi_getinfo() call.  The version is used by libfabric to determine what API features the application is aware of.  In this case, the application indicates that it can properly handle any feature that was defined for the 1.4 release (or earlier).
+
+Applications should _always_ hard code the version that they are written for into the fi_getinfo() call.  This ensures that newer versions of libfabric will provide backwards compatibility with that used by the application.
+
+Typically, an application will initialize the hints structure to list the features that it will use.
+
+```
+struct fi_info {
+    struct fi_info *next;
+    uint64_t caps;
+    uint64_t mode;
+    uint32_t addr_format;
+    size_t src_addrlen;
+    size_t dest_addrlen;
+    void *src_addr;
+    void *dest_addr;
+    fid_t handle;
+    struct fi_tx_attr *tx_attr;
+    struct fi_rx_attr *rx_attr;
+    struct fi_ep_attr *ep_attr;
+    struct fi_domain_attr *domain_attr;
+    struct fi_fabric_attr *fabric_attr;
+};
+```
+
+THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing those attributes are unnecessary.  Many applications will only need to deal with a few fields of fi_info.
 
 ### Capabilities
 ### Mode Bits
