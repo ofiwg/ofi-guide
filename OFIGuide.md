@@ -671,6 +671,14 @@ A single atomic function may operate across an array of data, applying an atomic
 A full description of the libfabric API is documented in the relevant man pages.  This section provides an introduction to select interfaces, including how they may be used.  It does not attempt to capture all subtleties or use cases, nor describe all possible data structures or fields.
 
 ## Using fi_getinfo
+
+The fi_getinfo() call is the first call that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.
+
+```
+int fi_getinfo(int version, const char *node, const char *service,
+    uint64_t flags, struct fi_info *hints, struct fi_info **info);
+```
+
 ### Capabilities
 ### Mode Bits
 ### Addressing
