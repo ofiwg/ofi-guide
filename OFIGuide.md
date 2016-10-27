@@ -770,7 +770,9 @@ struct fi_fabric_attr {
 };
 ```
 
-The only field that applications are likely to use directly is the prov_name.  This is a string value that can be used by hints to select a specific provider for use.  On most systems, there will be multiple providers available.  One likely represents the high-performance network attached to the system.  Others are generic providers that may be available on any system, such as the TCP socket and UDP providers.
+The only field that applications are likely to use directly is the prov_name.  This is a string value that can be used by hints to select a specific provider for use.  On most systems, there will be multiple providers available.  Only one is likely to represent the high-performance network attached to the system.  Others are generic providers that may be available on any system, such as the TCP socket and UDP providers.
+
+The fabric field is used to help applications manage open fabric resources.  If an application has already opened a fabric that can support the returned fi_info structure, this will be set to that fabric. The contents of struct fid_fabric is visible to applications.  It contains a pointer to the application's context data that was provided when the fabric was opened.
 
 ## Environment Variables
 
@@ -817,7 +819,35 @@ Full documentation for these variables is available in the man pages.  Variables
 The FI_LOG_LEVEL can be used to increase the debug output from libfabric and the providers.  Note that in the release build of libfabric, debug output from data path operations (transmit, receive, and completion processing) may not be available.  The FI_PROVIDER variable can be used to enable or disable specific providers.  This is useful to ensure that a given provider will be used.
 
 # Domains
+
+Domains usually map to a specific local network interface adapter.  A domain may either refer to the entire NIC, a port on a multi-port NIC, or a virtual device exposed by a NIC.  From the viewpoint of the application, a domain identifies a set of resources that may be used together.
+
 ## Attributes
+
+A domain defines the relationship between data transfer services (endpoints) and completion services (completion queues and counters).  Many of the domain attributes describe that relationship and its impact to the application.
+
+```
+struct fi_domain_attr {
+    struct fid_domain *domain;
+    char *name;
+    enum fi_threading threading;
+    enum fi_progress control_progress;
+    enum fi_progress data_progress;
+    enum fi_resource_mgmt resource_mgmt;
+    enum fi_av_type av_type;
+    enum fi_mr_mode mr_mode;
+    size_t mr_key_size;
+    size_t cq_data_size;
+    size_t cq_cnt;
+    size_t ep_cnt;
+    size_t tx_ctx_cnt;
+    size_t rx_ctx_cnt;
+    size_t max_ep_tx_ctx;
+    size_t max_ep_rx_ctx;
+    size_t max_ep_stx_ctx;
+    size_t
+```
+
 ## Opening
 ## Memory Registration
 
