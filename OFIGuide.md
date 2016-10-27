@@ -667,6 +667,9 @@ Atomic transfers are used to read and update data located in remote memory regio
 A single atomic function may operate across an array of data, applying an atomic operation to each entry, but the atomicity of an operation is limited to a single datatype or entry.  OFI defines a wide variety of atomic operations across all common data types.  However support for a given operation is dependent on the provider implementation.
 
 # Fabric Interfaces
+
+A full description of the libfabric API is documented in the relevant man pages.  This section provides an introduction to select interfaces, including how they may be used.  It does not attempt to capture all subtleties or use cases, nor describe all possible data structures or fields.
+
 ## Using fi_getinfo
 ### Capabilities
 ### Mode Bits
