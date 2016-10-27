@@ -1,7 +1,7 @@
 ---
 layout: page
 title: High Performance Network Programming with OFI
-tagline: Libfabric Programmer's Guide
+tagline: Libfabric (v1.4) Programmer's Guide
 ---
 {% include JB/setup %}
 
@@ -725,6 +725,8 @@ struct fi_info {
 
 THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing those attributes are unnecessary, with only a couple exceptions.  Many applications will only need to deal with a few fields of fi_info, most notably the capability (caps) and mode bits.
 
+On success, the fi_getinfo() function returns a linked list of fi_info structures. Each entry in the list will meet the conditions specified through the hints parameter. The returned entries may come from different network providers, or may differ in the returned attributes. For example, if hints does not specify a particular endpoint type, there may be an entry for each of the three endpoint types.  As a general rule, libfabric returns the list of fi_info structures in order from most desirable to least.  High-performance network providers are listed before more generic providers, such as the socket or UDP providers.
+
 ### Capabilities
 
 The fi_info caps field is used to specify the features and services that the application requires of the network.  This field is a bitmask of desired capabilities.  There are capability bits for each of the data transfer services mentioned above: FI_MSG, FI_TAGGED, FI_RMA, and FI_ATOMIC.  Applications should set each bit for each set of operations that it will use.  These bits are often the only bits set by an application.
@@ -751,11 +753,24 @@ Continuing with this example, if an application does not already track outstandi
 
 For the broadest support of different network technologies, applications should attempt to support as many mode bits as feasible.  Most providers attempt to support applications that cannot support any mode bits, with as small an impact as possible.  However, implementation of mode bit avoidance in the provider will often impact latency tests.
 
-### Addressing
-
 # Fabric
+
+The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider that the application will use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
+
 ## Attributes
-## Accessing
+
+The fabric attributes are straightforward.
+
+```
+struct fi_fabric_attr {
+    struct fid_fabric *fabric;
+    char *name;
+    char *prov_name;
+    uint32_t prov_version;
+};
+```
+
+The only field that applications are likely to use directly is the prov_name.  This is a string value that can be used by hints to select a specific provider for use.  On most systems, there will be multiple providers available.  One likely represents the high-performance network attached to the system.  Others are generic providers that may be available on any system, such as the TCP socket and UDP providers.
 
 # Domains
 ## Attributes
