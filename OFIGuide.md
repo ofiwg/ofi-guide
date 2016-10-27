@@ -662,6 +662,10 @@ Because RMA operations allow a peer to directly access the memory of a process, 
 
 ## Atomic operations
 
+Atomic transfers are used to read and update data located in remote memory regions in an atomic fashion. Conceptually, they are similar to local atomic operations of a similar nature (e.g. atomic increment, compare and swap, etc.).  The benfit of atomic operations is they enable offloading basic arithmetic capabilities onto a NIC.  Unlike other data transfer operations, atomics require knowledge of the format of the data being accessed.
+
+A single atomic function may operate across an array of data, applying an atomic operation to each entry, but the atomicity of an operation is limited to a single datatype or entry.  OFI defines a wide variety of atomic operations across all common data types.  However support for a given operation is dependent on the provider implementation.
+
 # Fabric Interfaces
 ## Using fi_getinfo
 ### Capabilities
