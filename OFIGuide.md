@@ -753,6 +753,58 @@ Continuing with this example, if an application does not already track outstandi
 
 For the broadest support of different network technologies, applications should attempt to support as many mode bits as feasible.  Most providers attempt to support applications that cannot support any mode bits, with as small an impact as possible.  However, implementation of mode bit avoidance in the provider will often impact latency tests.
 
+# FIDs
+
+FID stands for fabric identifier.  It is the conceptual equivalent to a file descriptor.  All fabric resources are represented by a fid structure.  All fid's are derived from a base fid type.  In object-oriented terms, a fid would be the parent class.  The contents of a fid are visible to the application.
+
+```
+/* Base FID definition */
+enum {
+    FI_CLASS_UNSPEC,
+    FI_CLASS_FABRIC,
+    FI_CLASS_DOMAIN,
+    ...
+};
+
+struct fi_ops {
+    size_t size;
+    int (*close)(struct fid *fid);
+    ...
+};
+
+/* All fabric interface descriptors must start with this structure */
+struct fid {
+    size_t fclass;
+    void *context;
+    struct fi_ops *ops;
+};
+
+```
+
+The fid structure is designed as a trade-off between minimizing memory footprint with minimal software overhead.  Each fid is identified as a specific object class.  Examples are given above (e.g. FI_CLASS_FABRIC).  The context field is an application defined data value.  The context field is usually passed as a parameter into the call that allocates the fid structure (e.g. fi_fabric() or fi_domain()).  The use of the context field is application specific.  Applications often set context to a corresponding structure that they've allocated.
+
+The ops field points to a set of function pointers.  The fi_ops structure defines the operations that apply to that class.  The size field in the fi_ops structure is used for extensibility, and allows the fi_ops structure to grow in a backward compatible manner as new operations are added.  The fid deliberately points to the fi_ops structure, rather than embedding the operations directly.  This allows multiple fids to point to the same set of ops, which minimizes the memory footprint of each fid. (Internally, providers usually set ops to a static data structure, with the fid structure dynamically allocated.)
+
+Although it's possible for applications to access function pointers directly.  It is strongly recommended that the static inline functions defined in the man pages be used instead.  This is required by applications that may be build using the FABRIC_DIRECT library feature.  (FABRIC_DIRECT is a compile time option that allows for highly optimized builds by tightly coupling an application with a specific provider.  See the man pages for more details.)
+
+Other OFI classes are derived from this structure, adding their own set of operations.
+
+```
+struct fi_ops_fabric {
+    size_t size;
+    int (*domain)(struct fid_fabric *fabric, struct fi_info *info,
+        struct fid_domain **dom, void *context);
+    ...
+};
+
+struct fid_fabric {
+    struct fid fid;
+    struct fi_ops_fabric *ops;
+};
+```
+
+Other fid classes follow a similar pattern as that shown for fid_fabric.  The base fid structure is followed by zero or more pointers to operation sets.
+
 # Fabric
 
 The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider that the application will use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
