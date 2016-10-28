@@ -912,6 +912,16 @@ Threading defines where providers could optimize synchronization primitives.  Ho
 
 Developers should study the fi_domain man page and available threading options.  Applications should select their desired mode.  If an application leaves the value undefined, providers will report the highest threading level that they support.
 
+## Progress
+
+As previously discussed, progress models are a result of using the host processor in order to perform some portion of the transport protocol.  In order to simply development, OFI defines two progress models: automatic or manual.  It does not attempt to identify which specific interfaces features may be offloaded, or what operations require additional processing by the application's thread.
+
+Automatic progress means that an operation initiated by the application will eventually complete, even if the application makes no further calls into the libfabric API.  The operation is either offloaded entirely onto hardware, the provider uses an internal thread, or the operating system kernel may perform the task.  The user of automatic progress may increase system overhead and latency.  For control operations, this is usually acceptable.  However, the impact to data transfers may be measurable, especially if internal threads are required to provide automatic progress.
+
+Applications need to take care when using manual progress, particularly if they link into libfabric multiple times through different code paths or library dependencies.  If application threads are used to drive progress, such as responding to received data with ACKs, then it is critical that the application thread call into libfabric in a timely manner.
+
+OFI defines wait and poll set objects that are specifically designed to assign with driving manual progress.
+
 ## Memory Registration
 
 # Endpoints
