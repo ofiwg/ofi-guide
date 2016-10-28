@@ -900,7 +900,18 @@ struct fi_domain_attr {
     size_t
 ```
 
-## Opening
+Details of select attributes and their impact to the application are described below.
+
+### Threading
+
+OFI defines a unique threading model.  The libfabric design is heavily influenced by object-oriented programming concepts.  The threading field identifies which objects may be accessed simultaneously by different threads.  This allows a provider to optimize or, in some cases, eliminate internal synchronization and locking around those objects.
+
+The threading is best described as synchronization levels.  As threading levels increase, greater parallelism is achieved.  For example, an application can indicate that it will only access an endpoint from a single thread.  This allows the provider to avoid acquiring locks around data transfer calls, knowing that there cannot be two simultaneous calls to send data on the same endpoint.  The provider would only need to provide serialization if separate endpoints accessed the same shared software or hardware resources.
+
+Threading defines where providers could optimize synchronization primitives.  However, providers may still implement more serialization than is needed by the application.  (This is usually a result of keeping the provider implementation simpler.)
+
+Developers should study the fi_domain man page and available threading options.  Applications should select their desired mode.  If an application leaves the value undefined, providers will report the highest threading level that they support.
+
 ## Memory Registration
 
 # Endpoints
