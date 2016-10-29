@@ -1,7 +1,7 @@
 ---
 layout: page
 title: High Performance Network Programming with OFI
-tagline: Libfabric Programmer's Guide
+tagline: Libfabric (v1.4) Programmer's Guide
 ---
 {% include JB/setup %}
 
@@ -470,19 +470,19 @@ In terms of implementation, control services are handled primarily by a single A
 
 Control services themselves are not considered performance critical.  However, the information exchanged between an application and the providers must be expressive enough to indicate the most performant way to access the network.  Those details must be balanced with ease of use.  As a result, the fi_getinfo() call provides the ability to access complex network details, while allowing an application to ignore them if desired.
 
-## Communication services
+## Communication Services
 
 Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
 
 The best match to socket routines would be connect(), bind(), listen(), and accept().  In fact the connection management calls are modeled after those functions, but with improved support for the asynchronous nature of the calls.  For performance and scalability reasons, connectionless endpoints use a unique model, that is not based on sockets or other network interfaces.  Address vectors are discussed in detail later, but target applications needing to talk with potentially thousands to millions of peers.  For applications communicating with a handful of peers, address vectors can slightly complicate initialization for connectionless endpoints.
 
-## Completion services
+## Completion Services
 
 OFI exports asynchronous interfaces. Completion services are used to report the results of submitted operations. Completions may be reported using the cleverly named completions queues, which provide details about the operation that completed. Or, completions may be reported using lower-impact counters that simply return the number of operations that have completed.
 
 Completion services are designed with high-performance, low-latency in mind.  The calls map directly into the providers, and data structures are defined to minimize memory writes and cache impact.  Completion services do not have corresponding socket APIs.
 
-## Data transfer services
+## Data Transfer Services
 
 Applications have needs of different data transfer semantics.  The data transfer services in OFI are designed around different communication paradigms. Although shown outside the data transfer services, triggered operations are strongly related to the data transfer operations.
 
@@ -494,7 +494,7 @@ RMA stands for remote memory access. RMA transfers allow an application to write
 
 Atomic operations are often viewed as a type of extended RMA transfer. They allow direct access to the memory on the target process. The benefit of atomic operations is that they allow for manipulation of the memory, such as incrementing the value found at the target buffer.  So, where RMA can write the value X to a remote memory buffer, atomics can change the value of the remote memory buffer, say Y, to Y + 1. Because RMA and atomic operations provide direct access to a process’s memory buffers, additional security synchronization is needed.
 
-## Memory registration
+## Memory Registration
 
 Memory registration is the security mechanism used to grant a remote peer access to local memory buffers.  Registered memory regions associate memory buffers with permissions granted for access by fabric resources. A memory buffer must be registered before it can be used as the target of an RMA or atomic data transfer.  Memory registration supports a simple protection mechanism.  After a memory buffer has been registered, that registration request (buffer's address, buffer length, and access permission) is given a registration key.  Peers that issue RMA or atomic operations against that memory buffer must provide this key as part of their operation.  This helps protects against unintentional accesses to the region. (Memory registration can help guard against malicious access, but it is often too weak by itself to ensure system isolation.  Other, fabric specific, mechanisms protect against malicious access.  Those mechanisms are outside of the scope of the libfabric API.)
 
@@ -520,7 +520,7 @@ A domain represents a logical connection into a fabric. For example, a domain ma
 
 Passive endpoints are used by connection-oriented protocols to listen for incoming connection requests. Passive endpoints often map to software constructs and may span multiple domains.  They are best represented by a listening socket.  Unlike the socket API, however, in which an allocated socket may be used with either a connect() or listen() call, a passive endpoint may only be used with a listen call.
 
-## Event Queues:
+## Event Queues
 
 EQs are used to collect and report the completion of asynchronous operations and events. Event queues handle _control_ events, which are not directly associated with data transfer operations. The reason for separating control events from data transfer events is for performance reasons.  Control events usually occur during an application's initialization phase, or at a rate that's several orders of magnitude smaller than data transfer events. Event queues are most commonly used by connection-oriented protocols for notification of connection request or established events.  A single event queue may combine multiple hardware queues with a software queue and expose them as a single abstraction.
 
@@ -553,9 +553,12 @@ Memory regions describe application’s local memory buffers. In order for fabri
 Address vectors are used by connectionless endpoints. They map higher level addresses, such as IP addresses, which may be more natural for an application to use, into fabric specific addresses. The use of address vectors allows providers to reduce the amount of memory required to maintain large address look-up tables, and eliminate expensive address resolution and look-up methods during data transfer operations. 
 
 # Communication Model
+
+OFI supports three main communication endpoint types: reliable-connected, unreliable datagram, and reliable-unconnected. (The fourth option, unreliable-connected is unused by applications, so is not included as part of the current implementation). Communication setup is based on whether the endpoint is connected or unconnected.  Reliability is a feature of the endpoint's data transfer protocol.
+
 ## Connected Communications
 
-The following diagram highlights the general usage behind connection-oriented communication.
+The following diagram highlights the general usage behind connection-oriented communication. Connected communication is based on the flow used to connect TCP sockets, with improved asynchronous support.
 
 ![Connecting](/assets/connections.PNG)
 
@@ -569,7 +572,7 @@ OFI does not define the connection establishment protocol, but does support a tr
 
 ## Connectionless Communications
 
-Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication.
+Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication. Connectionless communication setup differs from UDP sockets in that it requires that the remote addresses be stored with libfabric.
 
 ![Connectionless](/assets/connectionless.PNG)
 
@@ -577,8 +580,7 @@ OFI requires the addresses of peer endpoints be inserted into a local addressing
 
 Address vectors may be associated with an event queue. After an address is inserted into an address vector and the fabric specific details have been resolved, a completion event is generated on the event queue. Data transfer operations against that address are then permissible on active endpoints that are associated with the address vector. Connectionless endpoints must be associated with an address vector. 
 
-# Data Transfers
-## Endpoints
+# Endpoints
 
 Endpoints represent communication portals, and all data transfer operations are initiated on endpoints. OFI defines the conceptual model for how endpoints are exposed to applications, as demonstrated in the diagrams below.
 
@@ -588,7 +590,7 @@ Endpoints are usually associated with a transmit context and a receive context. 
 
 Endpoints are also associated with completion queues. Completion queues are used to report the completion of asynchronous data transfer operations. An endpoint may direct completed transmit and receive operations to separate completion queues, or the same queue (not shown)
 
-### Shared Contexts
+## Shared Contexts
 
 A more advanced usage model of endpoints that allows for resource sharing is shown below.
 
@@ -598,9 +600,10 @@ Because transmit and receive contexts may be associated with limited hardware re
 
 Completions are still associated with the endpoints, with each endpoint being associated with their own completion queue(s).
 
-#### Receive Contexts
-#### Transmit Contexts
-### Scalable Endpoints
+### Receive Contexts
+### Transmit Contexts
+
+## Scalable Endpoints
 
 The final endpoint model is known as a scalable endpoint. Scalable endpoints allow a single endpoint to take advantage of multiple underlying hardware resources.
 
@@ -608,25 +611,317 @@ The final endpoint model is known as a scalable endpoint. Scalable endpoints all
 
 Scalable endpoints have multiple transmit and/or receive contexts. Applications can direct data transfers to use a specific context, or the provider can select which context to use. Each context may be associated with its own completion queue. Scalable contexts allow applications to separate resources to avoid thread synchronization or data ordering restrictions.
 
+# Data Transfers
+
+Obviously, the goal of network communication is to transfer data between systems. In the same way that sockets defines different data transfer semantics for TCP versus UDP sockets (streaming versus datagram messages), OFI defines different data transfer semantics. However, unlike sockets, OFI allows different semantics over a single endpoint, even when communicating with the same peer.
+
+OFI defines separate sets of API for the different data transfer semantics; although, there are strong similarities between the API sets.  The differences are the result of the parameters needed to invoke each type of data transfer.
 
 ## Message transfers
+
+Message transfers are most similar to UDP datagram transfers.  The sender requests that data be transferred as a single transport operation to a peer.  Even if the data is referenced using an I/O vector, it is treated as a single logical unit.  The data is placed into a waiting receive buffer at the peer.  Unlike UDP sockets, message transfers may be reliable or unreliable, and many providers support message transfers that are  gigabytes in size.
+
+Message transfers are usually invoked using API calls that contain the string "send" or "recv".  As a result they may be referred to simply as sends or receives.
+
+Message transfers involve the target process posting memory buffers to the receive context of its endpoint.  When a message arrives from the network, a receive buffer is removed from the Rx context, and the data is copied from the network into the receive buffer.  Messages are matched with posted receives in the order that they are received.  Note that this may differ from the order that messages are sent, depending on the transmit side's ordering semantics.  Furthermore, received messages may complete out of order.  For instance, short messages could complete before larger messages.  Completion ordering semantics indicate the order that posted receive operations complete.
+
+Conceptually, on the transmit side, messages are posted to a send context.  The network processes messages from the send context, packetizing the data into outbound messages.  Although many implementations process the send context in order (i.e. the send context is a true queue), ordering guarantees determine the actual processing order.  For example, sent messages may be copied to the network out of order if targeting different peers.
+
+In the default case, OFI defines ordering semantics such that messages 1, 2, 3, etc. from the sender are received in the same order at the target.  Relaxed ordering semantics is an optimization technique that applications can opt into in order to improve network performance and utilization.
+
 ## Tagged messages
+
+Tagged messages are similar to message transfers except that the messages carry one additional piece of information, a message tag.  Tags are application defined values that are part of the message transfer protocol and are used to route packets at the receiver.  At a high level, they are roughly similar to sequence numbers or message ids.  The difference is that tag values are set by the application, may be any value, and duplicate tag values are allowed.
+
+Each sent message carries a single tag value, which is used when selecting a receive buffer into which the data is copied.  On the receiving side, message buffers are also marked with a tag.  Messages that arrive from the network search through the posted receive messages until a matching tag is found.  Tags allow messages to be placed into overlapping groups.
+
+Tags are often used to identify virtual communication groups or roles.  For example, one tag value may be used to identify a group of systems that contain input data into a program.  A second tag value could identify the systems involved in the processing of the data.  And a third tag may identify systems responsible for gathering the output from the processing.  (This is purely a hypothetical example for illustrative purposes only). Moreover, tags may carry additional data about the type of message being used by each group.  For example, messages could be separated based on whether the context carries control or data information.
+
+In practice, message tags are typically divided into fields.  For example, the upper 16 bits of the tag may indicate a virtual group, with the lower 16 bits identifying the message purpose.  The tag message interface in OFI is designed around this usage model.  Each sent message carries exactly one tag value, specified through the API.  At the receiver, buffers are associated with both a tag value and a mask.  The mask is applied to both the send and receive tag values (using a bitwise AND operation).  If the resulting values match, then the tags are said to match.  The received data is then placed into the matched buffer.
+
+For performance reasons, the mask is specified as 'ignore' bits. Although this is backwards from how many developers think of a mask (where the bits that are valid would be set to 1), the definition ends up mapping well with applications.  The actual operation performed when matching tags is:
+
+```
+send_tag | ignore == recv_tag | ignore
+/* this is equivalent to:
+ * send_tag & ~ignore == recv_tag & ~ignore
+ */
+```
+
+Tagged messages are equivalent of message transfers if a single tag value is used.  But tagged messages require that the receiver perform the matching operation at the target, which can impact performance versus untagged messages.
+
 ## RMA
+
+RMA operations are architected such that they can require no processing at the RMA target.  NICs which offload transport functionality can perform RMA operations without impacting host processing.  RMA write operations transmit data from the initiator to the target.  The memory location where the data should be written is carried within the transport message itself.
+
+RMA read operations fetch data from the target system and transfer it back to the initiator of the request, where it is copied into memory.  This too can be done without involving the host processor at the target system when the NIC supports transport offloading.
+
+The advantage of RMA operations is that they decouple the processing of the peers.  Data can be placed or fetched whenever the initiator is ready without necessarily impacting the peer process.
+
+Because RMA operations allow a peer to directly access the memory of a process, additional protection mechanisms are used to prevent unintentional or unwanted access.  RMA memory that is updated by a write operation or is fetched by a read operation must be registered for access with the correct permissions specified.
+
 ## Atomic operations
 
+Atomic transfers are used to read and update data located in remote memory regions in an atomic fashion. Conceptually, they are similar to local atomic operations of a similar nature (e.g. atomic increment, compare and swap, etc.).  The benfit of atomic operations is they enable offloading basic arithmetic capabilities onto a NIC.  Unlike other data transfer operations, atomics require knowledge of the format of the data being accessed.
+
+A single atomic function may operate across an array of data, applying an atomic operation to each entry, but the atomicity of an operation is limited to a single datatype or entry.  OFI defines a wide variety of atomic operations across all common data types.  However support for a given operation is dependent on the provider implementation.
+
 # Fabric Interfaces
+
+A full description of the libfabric API is documented in the relevant man pages.  This section provides an introduction to select interfaces, including how they may be used.  It does not attempt to capture all subtleties or use cases, nor describe all possible data structures or fields.
+
 ## Using fi_getinfo
+
+The fi_getinfo() call is one of the first call that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.  It serves several purposes. First, it abstracts away network implementation and addressing details.  Second, it allows an application to specify which features they require of the network.  Last, it provides a mechanism for a provider to report how an application can use the network in order to achieve the best performance.
+
+```
+/* API prototypes */
+struct fi_info *fi_allocinfo(void);
+
+int fi_getinfo(int version, const char *node, const char *service,
+    uint64_t flags, struct fi_info *hints, struct fi_info **info);
+```
+
+```
+/* Sample initialization code flow */
+struct fi_info *hints, *info;
+
+hints = fi_allocinfo();
+
+/* hints will point to a cleared fi_info structure
+ * Initialize hints here to request specific network capabilities
+ */
+
+fi_getinfo(FI_VERSION(1, 4), NULL, NULL, 0, hints, &info);
+fi_freeinfo(hints);
+
+/* Use the returned info structure to allocate fabric resources */
+```
+
+The hints parameter is the key for requesting fabric services.  The fi_info structure contains several data fields, plus pointers to a wide variety of attributes.  The fi_allocinfo() call simplifies the creation of a hint structure.  In this example, the application is merely attempting to get a list of what providers are available in the system, and the features that they support.  Note that the API is designed to be extensible.  Versioning information is provided as part of the fi_getinfo() call.  The version is used by libfabric to determine what API features the application is aware of.  In this case, the application indicates that it can properly handle any feature that was defined for the 1.4 release (or earlier).
+
+Applications should _always_ hard code the version that they are written for into the fi_getinfo() call.  This ensures that newer versions of libfabric will provide backwards compatibility with that used by the application.
+
+Typically, an application will initialize the hints structure to list the features that it will use.
+
+```
+struct fi_info {
+    struct fi_info *next;
+    uint64_t caps;
+    uint64_t mode;
+    uint32_t addr_format;
+    size_t src_addrlen;
+    size_t dest_addrlen;
+    void *src_addr;
+    void *dest_addr;
+    fid_t handle;
+    struct fi_tx_attr *tx_attr;
+    struct fi_rx_attr *rx_attr;
+    struct fi_ep_attr *ep_attr;
+    struct fi_domain_attr *domain_attr;
+    struct fi_fabric_attr *fabric_attr;
+};
+```
+
+THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing those attributes are unnecessary, with only a couple exceptions.  Many applications will only need to deal with a few fields of fi_info, most notably the capability (caps) and mode bits.
+
+On success, the fi_getinfo() function returns a linked list of fi_info structures. Each entry in the list will meet the conditions specified through the hints parameter. The returned entries may come from different network providers, or may differ in the returned attributes. For example, if hints does not specify a particular endpoint type, there may be an entry for each of the three endpoint types.  As a general rule, libfabric returns the list of fi_info structures in order from most desirable to least.  High-performance network providers are listed before more generic providers, such as the socket or UDP providers.
+
 ### Capabilities
+
+The fi_info caps field is used to specify the features and services that the application requires of the network.  This field is a bitmask of desired capabilities.  There are capability bits for each of the data transfer services mentioned above: FI_MSG, FI_TAGGED, FI_RMA, and FI_ATOMIC.  Applications should set each bit for each set of operations that it will use.  These bits are often the only bits set by an application.
+
+In some cases, additional bits may be used to limit how a feature will be used.  For example, an application can use the FI_SEND or FI_RECV bits to indicate that it will only send or receive messages, respectively.  Similarly, an application that will only initiate RMA writes, can set the FI_WRITE bit, leaving FI_REMOTE_WRITE unset.  The FI_SEND and FI_RECV bits can be used to restrict the supported message and tagged operations.  By default, if FI_MSG or FI_TAGGED are set, the resulting endpoint will be enabled to both send and receive messages.  Likewise, FI_READ, FI_WRITE, FI_REMOTE_READ, FI_REMOTE_WRITE can restrict RMA and atomic operations.
+
+Capabilities are grouped into two general categories: primary and secondary. Primary capabilities must explicitly be requested by an application, and a provider must enable support for only those primary capabilities which were selected. Secondary capabilities may optionally be requested by an application. If requested, a provider must support the capability or fail the fi_getinfo request. A provider may optionally report non-selected secondary capabilities if doing so would not compromise performance or security.
+
+All of the capabilities discussed so far are primary.  Secondary capabilities mostly deal with features desired by highly scalable, high-performance applications.  For example, the FI_MULTI_RECV secondary capability indicates if the provider can support the multi-receive buffers feature described above.
+
+Because different providers support different sets of capabilities, applications that desire optimal network performance may need to code for a capability being either present or absent.  When present, such capabilities can offer a scalability or performance boost.  When absent, an application may prefer to adjust its protocol or implementation to work around the network limitations.  Although providers can often emulate features, doing so can impact overall performance, including the performance of data transfers that otherwise appear unrelated to the feature in use.  For example, if a provider needs to insert protocol headers into the message stream in order to implement a given capability, the appearance of that header could negatively impact the performance of all transfers. By exposing such limitations to the application, it has better control over how to best emulate the feature or work around its absence.
+
+It is recommended that applications code for only those capabilities required to achieve the best performance.  If a capability would have little to no effect on overall performance, developers should avoid using such features as part of an initial implementation. This will allow the application to work well across the widest variety of hardware.  Application optimizations can then add support for less common features.  To see which features are supported by which providers, see the libfabric [Provider Feature Maxtrix](https://github.com/ofiwg/libfabric/wiki/Provider-Feature-Matrix) for the relevant release.
+
 ### Mode Bits
-### Addressing
+
+Where capability bits represent features desired by applications, mode bits correspond to behavior requested by the provider.  That is, capability bits are top down requests, whereas mode bits are bottom up restrictions.  Mode bits are set by the provider to request that the application use the API in a specific way in order to achieve optimal performance.  Mode bits often imply that the additional work needed by the application will be less overhead than forcing that same implementation down into the provider.  Mode bits arise as a result of hardware implementation restrictions.
+
+An application developer decides which mode bits they want to or can easily support as part of their development process.  Each mode bit describes a particular behavior that the application must follow to use various interfaces.  Applications set the mode bits that they support when calling fi_getinfo().  If a provider requires a mode bit that isn't set, that provider will be skipped by fi_getinfo().  If a provider does not need a mode bit that is set, it will respond to the fi_getinfo() call, with the mode bit cleared.  This indicates that the application does not need to perform the action required by the mode bit.
+
+One of the most common mode bits needed by providers is FI_CONTEXT.  This mode bit requires that applications pass in a libfabric defined data structure (struct fi_context) into any data transfer function.  That structure must remain valid and unused by the application until the data transfer operation completes.  The purpose behind this mode bit is that the struct fi_context provides "scratch" space that the provider can use to track the request.  For example, it may need to insert the request into a linked list, or track the number of times that an outbound transfer has been retried.  Since many applications already track outstanding operations with their own data structure, by embedding the struct fi_context into that same structure, overall performance can be improved.  This avoids the provider needing to allocate and free internal structures for each request.
+
+Continuing with this example, if an application does not already track outstanding requests, then it would leave the FI_CONTEXT mode bit unset.  This would indicate that the provider needs to get and release its own structure for tracking purposes.  In this case, the costs would essentially be the same whether it were done by the application or provider.
+
+For the broadest support of different network technologies, applications should attempt to support as many mode bits as feasible.  Most providers attempt to support applications that cannot support any mode bits, with as small an impact as possible.  However, implementation of mode bit avoidance in the provider will often impact latency tests.
+
+# FIDs
+
+FID stands for fabric identifier.  It is the conceptual equivalent to a file descriptor.  All fabric resources are represented by a fid structure.  All fid's are derived from a base fid type.  In object-oriented terms, a fid would be the parent class.  The contents of a fid are visible to the application.
+
+```
+/* Base FID definition */
+enum {
+    FI_CLASS_UNSPEC,
+    FI_CLASS_FABRIC,
+    FI_CLASS_DOMAIN,
+    ...
+};
+
+struct fi_ops {
+    size_t size;
+    int (*close)(struct fid *fid);
+    ...
+};
+
+/* All fabric interface descriptors must start with this structure */
+struct fid {
+    size_t fclass;
+    void *context;
+    struct fi_ops *ops;
+};
+
+```
+
+The fid structure is designed as a trade-off between minimizing memory footprint with minimal software overhead.  Each fid is identified as a specific object class.  Examples are given above (e.g. FI_CLASS_FABRIC).  The context field is an application defined data value.  The context field is usually passed as a parameter into the call that allocates the fid structure (e.g. fi_fabric() or fi_domain()).  The use of the context field is application specific.  Applications often set context to a corresponding structure that they've allocated.
+
+The ops field points to a set of function pointers.  The fi_ops structure defines the operations that apply to that class.  The size field in the fi_ops structure is used for extensibility, and allows the fi_ops structure to grow in a backward compatible manner as new operations are added.  The fid deliberately points to the fi_ops structure, rather than embedding the operations directly.  This allows multiple fids to point to the same set of ops, which minimizes the memory footprint of each fid. (Internally, providers usually set ops to a static data structure, with the fid structure dynamically allocated.)
+
+Although it's possible for applications to access function pointers directly.  It is strongly recommended that the static inline functions defined in the man pages be used instead.  This is required by applications that may be build using the FABRIC_DIRECT library feature.  (FABRIC_DIRECT is a compile time option that allows for highly optimized builds by tightly coupling an application with a specific provider.  See the man pages for more details.)
+
+Other OFI classes are derived from this structure, adding their own set of operations.
+
+```
+struct fi_ops_fabric {
+    size_t size;
+    int (*domain)(struct fid_fabric *fabric, struct fi_info *info,
+        struct fid_domain **dom, void *context);
+    ...
+};
+
+struct fid_fabric {
+    struct fid fid;
+    struct fi_ops_fabric *ops;
+};
+```
+
+Other fid classes follow a similar pattern as that shown for fid_fabric.  The base fid structure is followed by zero or more pointers to operation sets.
 
 # Fabric
+
+The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider that the application will use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
+
 ## Attributes
-## Accessing
+
+The fabric attributes are straightforward.
+
+```
+struct fi_fabric_attr {
+    struct fid_fabric *fabric;
+    char *name;
+    char *prov_name;
+    uint32_t prov_version;
+};
+```
+
+The only field that applications are likely to use directly is the prov_name.  This is a string value that can be used by hints to select a specific provider for use.  On most systems, there will be multiple providers available.  Only one is likely to represent the high-performance network attached to the system.  Others are generic providers that may be available on any system, such as the TCP socket and UDP providers.
+
+The fabric field is used to help applications manage open fabric resources.  If an application has already opened a fabric that can support the returned fi_info structure, this will be set to that fabric. The contents of struct fid_fabric is visible to applications.  It contains a pointer to the application's context data that was provided when the fabric was opened.
+
+## Environment Variables
+
+Environment variables are used by providers to configure internal options for optimal performance or memory consumption.  Libfabric provides an interface for querying which environment variables are usable, along with an application to display the information to a command window.  Although environment variables are usually configured by an administrator, an application can query for variables programmatically.
+
+```
+/* APIs to query for supported environment variables */
+enum fi_param_type {
+    FI_PARAM_STRING,
+    FI_PARAM_INT,
+    FI_PARAM_BOOL
+};
+
+struct fi_param {
+    const char *name;
+    enum fi_param_type type;
+    const char *help_string;
+    const char *value;
+};
+
+int fi_getparams(struct fi_param **params, int *count);
+void fi_freeparams(struct fi_param *params);
+```
+
+The modification of environment variables is typically a tuning activity done on larger clusters.  However there are a few values that are useful for developers.  These can be seen by executing the fi_info command.
+
+```
+$ fi_info -e
+# FI_LOG_LEVEL: String
+# Specify logging level: warn, trace, info, debug (default: warn)
+
+# FI_LOG_PROV: String
+# Specify specific provider to log (default: all)
+
+# FI_LOG_SUBSYS: String
+# Specify specific subsystem to log (default: all)
+
+# FI_PROVIDER: String
+# Only use specified provider (default: all available)
+```
+
+Full documentation for these variables is available in the man pages.  Variables beyond these may only be documented directly in the library itself, and available using the 'fi_info -e' command.
+
+The FI_LOG_LEVEL can be used to increase the debug output from libfabric and the providers.  Note that in the release build of libfabric, debug output from data path operations (transmit, receive, and completion processing) may not be available.  The FI_PROVIDER variable can be used to enable or disable specific providers.  This is useful to ensure that a given provider will be used.
 
 # Domains
+
+Domains usually map to a specific local network interface adapter.  A domain may either refer to the entire NIC, a port on a multi-port NIC, or a virtual device exposed by a NIC.  From the viewpoint of the application, a domain identifies a set of resources that may be used together.
+
 ## Attributes
-## Opening
+
+A domain defines the relationship between data transfer services (endpoints) and completion services (completion queues and counters).  Many of the domain attributes describe that relationship and its impact to the application.
+
+```
+struct fi_domain_attr {
+    struct fid_domain *domain;
+    char *name;
+    enum fi_threading threading;
+    enum fi_progress control_progress;
+    enum fi_progress data_progress;
+    enum fi_resource_mgmt resource_mgmt;
+    enum fi_av_type av_type;
+    enum fi_mr_mode mr_mode;
+    size_t mr_key_size;
+    size_t cq_data_size;
+    size_t cq_cnt;
+    size_t ep_cnt;
+    size_t tx_ctx_cnt;
+    size_t rx_ctx_cnt;
+    size_t max_ep_tx_ctx;
+    size_t max_ep_rx_ctx;
+    size_t max_ep_stx_ctx;
+    size_t
+```
+
+Details of select attributes and their impact to the application are described below.
+
+### Threading
+
+OFI defines a unique threading model.  The libfabric design is heavily influenced by object-oriented programming concepts.  The threading field identifies which objects may be accessed simultaneously by different threads.  This allows a provider to optimize or, in some cases, eliminate internal synchronization and locking around those objects.
+
+The threading is best described as synchronization levels.  As threading levels increase, greater parallelism is achieved.  For example, an application can indicate that it will only access an endpoint from a single thread.  This allows the provider to avoid acquiring locks around data transfer calls, knowing that there cannot be two simultaneous calls to send data on the same endpoint.  The provider would only need to provide serialization if separate endpoints accessed the same shared software or hardware resources.
+
+Threading defines where providers could optimize synchronization primitives.  However, providers may still implement more serialization than is needed by the application.  (This is usually a result of keeping the provider implementation simpler.)
+
+Developers should study the fi_domain man page and available threading options.  Applications should select their desired mode.  If an application leaves the value undefined, providers will report the highest threading level that they support.
+
+## Progress
+
+As previously discussed, progress models are a result of using the host processor in order to perform some portion of the transport protocol.  In order to simply development, OFI defines two progress models: automatic or manual.  It does not attempt to identify which specific interfaces features may be offloaded, or what operations require additional processing by the application's thread.
+
+Automatic progress means that an operation initiated by the application will eventually complete, even if the application makes no further calls into the libfabric API.  The operation is either offloaded entirely onto hardware, the provider uses an internal thread, or the operating system kernel may perform the task.  The user of automatic progress may increase system overhead and latency.  For control operations, this is usually acceptable.  However, the impact to data transfers may be measurable, especially if internal threads are required to provide automatic progress.
+
+Applications need to take care when using manual progress, particularly if they link into libfabric multiple times through different code paths or library dependencies.  If application threads are used to drive progress, such as responding to received data with ACKs, then it is critical that the application thread call into libfabric in a timely manner.
+
+OFI defines wait and poll set objects that are specifically designed to assign with driving manual progress.
+
 ## Memory Registration
 
 # Endpoints
