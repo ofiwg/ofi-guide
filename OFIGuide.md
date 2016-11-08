@@ -938,10 +938,7 @@ Although not part of the basic memory registration mode definition, hardware tha
 
 Scalable memory registration targets highly parallel, high-performance applications.  Such applications often have an additional level of security that allows the peers to operate in a more trusted environment where memory registration is employed.  In scalable mode, registration occurs on memory address ranges, and the MR attributes are selected by the user. There are two notable differences with scalable mode.
 
-First, is that the address ranges do not need to map to allocated memory buffers at the time the registration call is made.  (Virtual memory must back the ranges before they are accessed as part of any data transfer operation.)  This allows, for example, for an application to expose all or a significant portion of its address space to peers.
-
-Memory regions registered as the target of RMA and atomic operations are associated with a MR key selected by the application. If local registrations are required (see FI_LOCAL_MR mode), the local descriptor will be the same as the remote key. The resulting memory region will be accessible by remote peers starting at a base address of 0. Because scalable registration mode refers to memory regions, versus data buffers, the address ranges given for a registration request do not need to map to data buffers allocated by the application at the time the registration call is made. That is, an application can register any range of addresses in their virtual address space, whether or not those addresses are backed by physical pages or have been allocated. 
-
+First is that the address ranges do not need to map to allocated memory buffers at the time the registration call is made.  (Virtual memory must back the ranges before they are accessed as part of any data transfer operation.)  This allows, for example, for an application to expose all or a significant portion of its address space to peers.  When combined with a symmetric memory allocator, this feature can eliminate a process from needing to store the target addresses of its peers.  Second, the application selects the protection key for the region.  Target addresses and keys can be hard-coded or derived from local addresses, reducing the memory footprint and avoiding network traffic associated with registration.
 
 # Endpoints
 ## Active
