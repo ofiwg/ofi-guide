@@ -809,6 +809,13 @@ Other fid classes follow a similar pattern as that shown for fid_fabric.  The ba
 
 The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider that the application will use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
 
+Opening a fabric is usually a straightforward call after calling fi_getinfo().
+
+```
+int fi_fabric(struct fi_fabric_attr *attr, struct fid_fabric **fabric, void *context);
+```
+The fabric attributes can be directly accessed from struct fi_info. The newly opened fabric is returned through the 'fabric' parameter.  The 'context' parameter appears in many operations.  It is a user-specified value that is associated with the fabric.  It may be used to point to an application specific structure and is retrievable from struct fid_fabric.
+
 ## Attributes
 
 The fabric attributes are straightforward.
