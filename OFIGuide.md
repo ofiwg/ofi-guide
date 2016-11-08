@@ -940,7 +940,42 @@ Scalable memory registration targets highly parallel, high-performance applicati
 
 First is that the address ranges do not need to map to allocated memory buffers at the time the registration call is made.  (Virtual memory must back the ranges before they are accessed as part of any data transfer operation.)  This allows, for example, for an application to expose all or a significant portion of its address space to peers.  When combined with a symmetric memory allocator, this feature can eliminate a process from needing to store the target addresses of its peers.  Second, the application selects the protection key for the region.  Target addresses and keys can be hard-coded or derived from local addresses, reducing the memory footprint and avoiding network traffic associated with registration.
 
+### Memory Region API
+
+The following APIs highlight how to allocate and access a registered memory region.  Note that this is not a complete list of memory region (MR) calls, and for full details on each API, readers should refer directly to the man pages.
+
+```
+int fi_mr_reg(struct fid_domain *domain, const void *buf, size_t len,
+    uint64_t access, uint64_t offset, uint64_t requested_key, uint64_t flags,
+    struct fid_mr **mr, void *context);
+void * fi_mr_desc(struct fid_mr *mr);
+uint64_t fi_mr_key(struct fid_mr *mr);
+```
+By default, memory regions are associated with a domain.  A MR is accessible by any endpoint that is opened on that domain.  A region starts at the address specified by 'buf', and is 'len' bytes long.  The 'access' parameter are permission flags that are OR'ed together.  The permissions indicate which type of operations may be invoked against the region (e.g. FI_READ, FI_WRITE, FI_REMOTE_READ, FI_REMOTE_WRITE).  The 'buf' parameter must point to allocated virtual memory when using basic registration mode.
+
+If scalable registration is used, the application can specify the desired MR key through the 'requested_key' parameter.  The 'offset' and 'flags' parameters are not used and reserved for future use.
+
+A MR is associated with local and remote protection keys.  The local key is referred to as a memory descriptor and may be retrieved by calling fi_mr_desc().  This call is only needed if the FI_LOCAL_MR mode bit has been set.  The memory descriptor is passed directly into data transfer operations.
+
+The remote key, or simply MR key, is used by the peer when targeting the MR with an RMA or atomic operation. If scalable registration is used, the MR key will be the same as the 'requested_key'.  Otherwise, it is a provider selected value.  The key must be known to the peer.  If basic registration is used, this means that the key will need to be sent in a separate message to the initiating peer.  (Some applications exchange the key as part of connection setup.)
+
+The API is designed to handle MR keys that are at most 64-bits long.  The size of the actual key is reported as a domain attribute.  Typical sizes are either 32 or 64 bits, depending on the underlying fabric.  Support for keys larger than 64-bits is possible but requires using extended calls not discussed here.
+
 # Endpoints
+
+Endpoints are transport level communication portals. There are two types of endpoints: active and passive. Passive endpoints belong to a fabric domain and are most often used to listen for incoming connection requests. However, a passive endpoint may be used to reserve a fabric address that can be granted to an active endpoint. Active endpoints belong to access domains and can perform data transfers.
+
+Active endpoints may be connection-oriented or connectionless, and may provide data reliability. The data transfer interfaces – messages (fi_msg), tagged messages (fi_tagged), RMA (fi_rma), and atomics (fi_atomic) – are associated with active endpoints. In basic configurations, an active endpoint has transmit and receive queues. In general, operations that generate traffic on the fabric are posted to the transmit queue. This includes all RMA and atomic operations, along with sent messages and sent tagged messages. Operations that post buffers for receiving incoming data are submitted to the receive queue.
+
+Active endpoints are created in the disabled state. They must transition into an enabled state before accepting data transfer operations, including posting of receive buffers. The fi_enable call is used to transition an active endpoint into an enabled state. The fi_connect and fi_accept calls will also transition an endpoint into the enabled state, if it is not already active.
+
+In order to transition an endpoint into an enabled state, it must be bound to one or more fabric resources. An endpoint that will generate asynchronous completions, either through data transfer operations or communication establishment events, must be bound to the appropriate completion queues or event queues, respectively, before being enabled. Unconnected endpoints must be bound to an address vector.
+
+Once an endpoint has been activated, it may be associated with an address vector. Receive buffers may be posted to it and calls may be made to connection establishment routines. Connectionless endpoints may also perform data transfers.
+
+The behavior of an endpoint may be adjusted by setting its control data and protocol options. This allows the underlying provider to redirect function calls to implementations optimized to meet the desired application behavior.
+
+
 ## Active
 ### Enabling
 ## Passive
