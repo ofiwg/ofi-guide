@@ -902,7 +902,7 @@ struct fi_domain_attr {
 
 Details of select attributes and their impact to the application are described below.
 
-### Threading
+## Threading
 
 OFI defines a unique threading model.  The libfabric design is heavily influenced by object-oriented programming concepts.  The threading field identifies which objects may be accessed simultaneously by different threads.  This allows a provider to optimize or, in some cases, eliminate internal synchronization and locking around those objects.
 
@@ -923,6 +923,25 @@ Applications need to take care when using manual progress, particularly if they 
 OFI defines wait and poll set objects that are specifically designed to assign with driving manual progress.
 
 ## Memory Registration
+
+RMA and atomic operations can both read and write memory that is owned by a peer process, and neither require the involvement of the target processor.  Because the memory can be modified over the network, an application must opt into exposing its memory to peers.  This is handled by the memory registration process.  Registered memory regions associate memory buffers with permissions granted for access by fabric resources. A memory buffer must be registered before it can be used as the target of a remote RMA or atomic data transfer. Additionally, a fabric provider may require that data buffers be registered before being used in local transfers.  The latter is necessary to ensure that the virtual to physical page mappings do not change.
+
+Although there are a few different attributes that apply to memory registration, OFI groups those attributes into one of two different modes (for application simiplicity).
+
+### Basic Memory Registration Mode
+
+Basic memory registration mode is defined around supporting the InfiniBand and iWarp architectures, which maps well to a wide variety of RMA capable hardware.  In basic mode, registration occurs on allocated memory buffers, and the MR attributes are selected by the provider.  The application must only register allocated memory, and the protection keys that are used to access the memory are assigned by the provider.  The impact of using basic registration is that the application must inform any peer that wishes to access the region the local virtual address of the memory buffer, along with the key to use when accessing it.
+
+Although not part of the basic memory registration mode definition, hardware that supports this mode frequently requires that all data buffers used for network communication also be registered.  This includes buffers posted to send or receive messages, source RMA and atomic buffers, and tagged message buffers.  This restriction is indicated using the FI_LOCAL_MR mode bit.
+
+### Scalable Memory Registration Mode
+
+Scalable memory registration targets highly parallel, high-performance applications.  Such applications often have an additional level of security that allows the peers to operate in a more trusted environment where memory registration is employed.  In scalable mode, registration occurs on memory address ranges, and the MR attributes are selected by the user. There are two notable differences with scalable mode.
+
+First, is that the address ranges do not need to map to allocated memory buffers at the time the registration call is made.  (Virtual memory must back the ranges before they are accessed as part of any data transfer operation.)  This allows, for example, for an application to expose all or a significant portion of its address space to peers.
+
+Memory regions registered as the target of RMA and atomic operations are associated with a MR key selected by the application. If local registrations are required (see FI_LOCAL_MR mode), the local descriptor will be the same as the remote key. The resulting memory region will be accessible by remote peers starting at a base address of 0. Because scalable registration mode refers to memory regions, versus data buffers, the address ranges given for a registration request do not need to map to data buffers allocated by the application at the time the registration call is made. That is, an application can register any range of addresses in their virtual address space, whether or not those addresses are backed by physical pages or have been allocated. 
+
 
 # Endpoints
 ## Active
