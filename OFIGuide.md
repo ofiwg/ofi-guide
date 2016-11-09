@@ -1000,7 +1000,6 @@ int fi_endpoint(struct fid_domain *domain, struct fi_info *info,
     struct fid_ep **ep, void *context);
 ```
 
-
 ### Enabling
 
 In order to transition an endpoint into an enabled state, it must be bound to one or more fabric resources. An endpoint that will generate asynchronous completions, either through data transfer operations or communication establishment events, must be bound to the appropriate completion queues or event queues, respectively, before being enabled. Unconnected endpoints must be bound to an address vector.
@@ -1008,12 +1007,12 @@ In order to transition an endpoint into an enabled state, it must be bound to on
 ```
 /* Example to enable an unconnected endpoint */
 fi_av_open(domain, &av_attr, &av, NULL);
+fi_ep_bind(ep, &av->fid, 0);
 
 fi_cq_open(domain, &tx_cq_attr, &tx_cq, NULL);
-fi_cq_open(domain, &rx_cq_attr, &rx_cq, NULL);
-
-fi_ep_bind(ep, &av->fid, 0);
 fi_ep_bind(ep, &tx_cq->fid, FI_TRANSMIT);
+
+fi_cq_open(domain, &rx_cq_attr, &rx_cq, NULL);
 fi_ep_bind(ep, &rx_cq->fid, FI_RECV);
 
 fi_enable(ep);
@@ -1024,6 +1023,52 @@ In the above example, we allocate an address vector and send and receive complet
 The fi_enable() call is always called for unconnected endpoints.  Connected endpoints may be able to skip calling fi_enable(), since fi_connect() and fi_accept() will enable the endpoint automatically.  However, applications may still call fi_enable() prior to calling fi_connect() or fi_accept().  Doing so allows the application to post receive buffers to the endpoint, which ensures that they are available to receive data in the case where the peer endpoint sends messages immediately after it establishes the connection.
 
 ## Passive
+
+Passive endpoints are used to listen for incoming connection requests.  Passive endpoints are of type FI_EP_MSG, and may not perform any data transfers.  An application wishing to create a passive endpoint typically calls fi_getinfo() using the FI_SOURCE flag, often only specifying a 'service' address.  The service address corresponds to a TCP port number.
+
+Passive endpoints are associated with event queues.  Event queues report connection requests from peers.  Unlike active endpoints, passive endpoints are not associated with a domain.  This allows an application to listen for connection requests across multiple domains.
+
+```
+/* Example passive endpoint listen */
+fi_passive_ep(fabric, info, &pep, NULL);
+
+fi_eq_open(fabric, &eq_attr, &eq, NULL);
+fi_pep_bind(pep, &eq->fid, 0);
+
+fi_listen(pep);
+```
+
+A passive endpoint must be bound to an event queue before calling listen.  This ensures that connection requests can be reported to the application.  To accept new connections, the application should wait for a request, allocated a new active endpoint for it, and accept the request.
+
+```
+/* Example accepting a new connection */
+fi_eq_sread(eq, &event, &cm_entry, sizeof cm_entry, -1, 0);
+assert(event == FI_CONNREQ);
+
+if (!cm_entry.info->domain_attr->domain)
+    fi_domain(fabric, cm_entry.info, &domain, NULL);
+fi_endpoint(domain, cm_entry.info, &ep, NULL);
+
+fi_ep_bind(ep, &eq->fid, 0);
+fi_cq_open(domain, &tx_cq_attr, &tx_cq, NULL);
+fi_ep_bind(ep, &tx_cq->fid, FI_TRANSMIT);
+fi_cq_open(domain, &rx_cq_attr, &rx_cq, NULL);
+fi_ep_bind(ep, &rx_cq->fid, FI_RECV);
+
+fi_enable(ep);
+fi_recv(ep, rx_buf, len, NULL, 0, NULL);
+
+fi_accept(ep, NULL, 0);
+fi_eq_sread(eq, &event, &cm_entry, sizeof cm_entry, -1, 0);
+assert(event == FI_CONNECTED);
+```
+
+The connection request event (FI_CONNREQ) includes information about the type of endpoint to allocate, including default attributes to use.  If a domain has not already been opened for the endpoint, it should be opened now.  Then the endpoint and related resources can be allocated.  Unlike the unconnected endpoint example above, a connected endpoint does not have an AV, but does need to be bound to an event queue.  In this case, we use the same EQ as the listening endpoint.  Once the other EP resources (e.g. CQs) have been allocated and bound, the EP can be enabled.
+
+To accept the connection, the application calls fi_accept().  Note that because of thread synchronization issues, it is possible for the active endpoint to receive data even before fi_accept() can return.  The posting of receive buffers prior to calling fi_accept() handles this condition, which avoids network flow control issues occurring immediately after connecting.
+
+The fi_eq_sread() calls are blocking (synchronous) read calls to the event queue.  These calls wait until an event occurs, which in this case are connection request and establishment events.
+
 ## Scalable
 ## Resource Bindings
 ## EP Attributes
