@@ -1070,6 +1070,56 @@ To accept the connection, the application calls fi_accept().  Note that because 
 The fi_eq_sread() calls are blocking (synchronous) read calls to the event queue.  These calls wait until an event occurs, which in this case are connection request and establishment events.
 
 ## Scalable
+
+For most applications, an endpoint consists of a transmit and receive context associated with a single address.  The transmit and receive contexts often map to hardware command queues.  For multi-threaded applications, access to these hardware queues requires serialization, which can lead to them becoming bottlenecks.  Scalable endpoints were created to address this.
+
+A scalable endpoint is an endpoint that has multiple transmit and/or receive contexts associated with it.  As an example, consider an application that allocates a total of four processing threads.  By assigning each thread its own transmit context, the application can avoid serializing (i.e. locking) access to hardware queues.
+
+The advantage of using a scalable endpoint over allocating multiple traditional endpoints is reduced addressing footprint.  A scalable endpoint has a single address, regardless of how many transmit or receive contexts it may have.
+
+Support for scalable endpoints is provider specific, with support indicated by the domain attributes:
+
+```
+struct fi_domain_attr {
+    ...
+    size_t max_ep_tx_ctx;
+    size_t max_ep_rx_ctx;
+    ...
+```
+
+The above fields indicates the maximum number of transmit and receive contexts, respectively, that may be associated with a single endpoint.  One or both of these values will be greater than one if scalable endpoints are supported.  Applications can configure and allocate a scalable endpoint using the fi_scalable_ep call:
+
+```
+/* Set the required number of transmit of receive contexts
+ * These must be <= the domain maximums listed above.
+ * This will usually be set prior to caling fi_getinfo
+ */
+struct fi_info *hints, *info;
+struct fid_domain *domain;
+struct fid_ep *scalable_ep, *tx_ctx[4], *rx_ctx[2];
+
+hints = fi_allocinfo();
+...
+hints->ep_attr->tx_ctx_cnt = 4;
+hints->ep_attr->rx_ctx_cnt = 2;
+
+/* Call fi_getinfo and open fabric, domain, etc. */
+
+fi_scalable_ep(domain, info, &sep, NULL);
+```
+
+The above example opens an endpoint with four transmit and two receive contexts.  However, a scalable endpoint only needs to be scalable in one dimension -- transmit or receive.  For example, it could use multiple transmit contexts, but only require a single receive contexts.  It could even use a shared context, if desired.
+
+Submitting data transfer operations to a scalable endopint is more involved.  First, if the endpoint only has a single transmit context, then all transmit operations are posted directly to the scalable endpoint, the same as if a traditional endpoint were used.  Likewise, if the endpoint only has a single receive context, then all receive operations are posted directly to the scalable endpoint.  An additional step is needed before posting operations to one of many contexts (that is the 'scalable' portion of the endpoint).  The desired context must first be retrieved:
+
+```
+/* Retrieve the first (index 0) transmit and receive contexts */
+fi_tx_context(scalable_ep, 0, info->tx_attr, &tx_ctx[0], &tx_ctx[0]);
+fi_rx_context(scalable_ep, 0, info->rx_attr, &rx_ctx[0], &rx_ctx[0]);
+```
+
+Data transfer operations are then posted to the tx_ctx or rx_ctx.  It should be noted that although the scalable endpoint, transmit context, and receive context are all of type fid_ep, attempting to submit a data transfer operation against the wrong object will result in an error.
+
 ## Resource Bindings
 ## EP Attributes
 ## Rx Attributes
