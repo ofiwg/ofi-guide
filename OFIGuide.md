@@ -153,7 +153,7 @@ The flow for receiving data is similar to that used to send it.  Because of the 
 
 ## Connection-less (UDP) Communication
 
-<TO DO>
+TO DO
 
 ## Advantages
 
@@ -1049,6 +1049,7 @@ if (!cm_entry.info->domain_attr->domain)
     fi_domain(fabric, cm_entry.info, &domain, NULL);
 fi_endpoint(domain, cm_entry.info, &ep, NULL);
 
+/* See the resource binding section below for details on associated fabric objects */
 fi_ep_bind(ep, &eq->fid, 0);
 fi_cq_open(domain, &tx_cq_attr, &tx_cq, NULL);
 fi_ep_bind(ep, &tx_cq->fid, FI_TRANSMIT);
@@ -1100,6 +1101,8 @@ struct fid_ep *scalable_ep, *tx_ctx[4], *rx_ctx[2];
 
 hints = fi_allocinfo();
 ...
+
+/* A scalable endpoint requires > 1 Tx or Rx queue */
 hints->ep_attr->tx_ctx_cnt = 4;
 hints->ep_attr->rx_ctx_cnt = 2;
 
@@ -1121,7 +1124,44 @@ fi_rx_context(scalable_ep, 0, info->rx_attr, &rx_ctx[0], &rx_ctx[0]);
 Data transfer operations are then posted to the tx_ctx or rx_ctx.  It should be noted that although the scalable endpoint, transmit context, and receive context are all of type fid_ep, attempting to submit a data transfer operation against the wrong object will result in an error.
 
 ## Resource Bindings
+
+Before an endpoint can be used for data transfers, it must be associated with other resources, such as completion queues, counters, address vectors, or event queues. Resource bindings must be done prior to enabling an endpoint.  All active endpoints must be bound to completion queues.  Unconnected endpoints must be associated with an address vector.  Passive and connection-oriented endpoints must be bound to an event queue.  The resource binding requirements are cumulative: for example, an RDM endpoint must be bound to completion queues and address vectors.
+
+Resources are associated with endpoints using a bind operation:
+
+```
+int fi_ep_bind(struct fid_ep *ep, struct fid *fid, uint64_t flags);
+int fi_scalable_ep_bind(struct fid_ep *sep, struct fid *fid, uint64_t flags);
+int fi_pep_bind(struct fid_pep *pep, struct fid *fid, uint64_t flags);
+```
+
+The bind functions are similar to each other (and may to the same fi_bind call internally).  Flags are used to indicate how the resources should be associated.  The passive endpoint section above shows an example of binding an passive and active endpoints to event and completion queues.
+
 ## EP Attributes
+
+The properties of an endpoint are specified using endpoint attributes.  These may be set as hints passed into the fi_getinfo call.  Unset values will be filled out by the provider.
+```
+struct fi_ep_attr {
+    enum fi_ep_type type;
+    uint32_t        protocol;
+    uint32_t        protocol_version;
+    size_t          max_msg_size;
+    size_t          msg_prefix_size;
+    size_t          max_order_raw_size;
+    size_t          max_order_war_size;
+    size_t          max_order_waw_size;
+    uint64_t        mem_tag_format;
+    size_t          tx_ctx_cnt;
+    size_t          rx_ctx_cnt;
+};
+```
+
+A full description of each field is available in the libfabic man pages, with selected details listed below.
+
+### Endpoint Type
+
+This indicates the type of endpoint: reliable datagram (FI_EP_RDM), reliable-connected (FI_EP_MSG), or unreliable datagram (DGRAM).  Nearly all applications will need to specify the endpoint type as a hint passed into fi_getinfo, as most applications will only be coded to support a single endpoint type.
+
 ## Rx Attributes
 ## Tx Attributes
 
