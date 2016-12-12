@@ -153,7 +153,7 @@ The flow for receiving data is similar to that used to send it.  Because of the 
 
 ## Connection-less (UDP) Communication
 
-TO DO
+TODO
 
 ## Advantages
 
@@ -601,7 +601,12 @@ Because transmit and receive contexts may be associated with limited hardware re
 Completions are still associated with the endpoints, with each endpoint being associated with their own completion queue(s).
 
 ### Receive Contexts
+
+TODO
+
 ### Transmit Contexts
+
+TODO
 
 ## Scalable Endpoints
 
