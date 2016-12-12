@@ -1184,8 +1184,40 @@ For example, consider an RMA read followed by a write. The target will process t
 
 Because the read or write operation may be gigabytes in size, deferring the write may add significant latency, and buffering the read response may be impractical. The max_order_xxx_size fields indicate how large back to back operations may be with ordering still maintained. In many cases, read after write and write and read ordering may be significantly limited, but still usable for implementing specific algorithms, such as a global locking mechanism.
 
-## Rx Attributes
-## Tx Attributes
+## Rx/Tx Context Attributes
+
+The endpoint attributes define the overall abilities for the endpoint; however, attributes that apply specifically to receive or transmit contexts are defined by struct fi_rx_attr and fi_tx_attr, respectively:
+
+```
+struct fi_rx_attr {
+    uint64_t caps;
+    uint64_t mode;
+    uint64_t op_flags;
+    uint64_t msg_order;
+    uint64_t comp_order;
+    size_t total_buffered_recv;
+    size_t size;
+    size_t iov_limit;
+};
+
+struct fi_tx_attr {
+    uint64_t caps;
+    uint64_t mode;
+    uint64_t op_flags;
+    uint64_t msg_order;
+    uint64_t comp_order;
+    size_t inject_size;
+    size_t size;
+    size_t iov_limit;
+    size_t rma_iov_limit;
+};
+```
+
+Context capabilities must be a subset of the endpoint capabilities. For many applications, the default attributes returned by the provider will be sufficient, with the application only needing to specify endpoint attributes.
+
+Both context attributes include an op_flags field. This field is used by applications to specify the default operation flags to use with any call. For example, by setting the transmit context’s op_flags to FI_INJECT, the application has indicated to the provider that all transmit operations should assume ‘inject’ behavior is desired. (I.e. the buffer provided to the call must be returned to the application upon return from the function). The op_flags applies to all operations that do not provide flags as part of the call (e.g. fi_sendmsg).
+
+It should be noted that some attributes are dependent upon the peer endpoint having supporting attributes in order to achieve correct application behavior. For example, message order must be the compatible between the initiator’s transmit attributes and the target’s receive attributes. Any mismatch may result in incorrect behavior that could be difficult to debug.
 
 # Completions
 ## CQs
