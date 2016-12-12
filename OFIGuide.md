@@ -1123,6 +1123,8 @@ fi_rx_context(scalable_ep, 0, info->rx_attr, &rx_ctx[0], &rx_ctx[0]);
 
 Data transfer operations are then posted to the tx_ctx or rx_ctx.  It should be noted that although the scalable endpoint, transmit context, and receive context are all of type fid_ep, attempting to submit a data transfer operation against the wrong object will result in an error.
 
+Be default all transmit and receive contexts belonging to a scalable endpoint are similar with respect to other transmit and receive contexts.  However, applications can request that a context have fewer capabilities than what was requested for the scalable endpoint.  This allows the provider to configure its hardware resources for optimal performance.  For example, a scalable endpoint may be configured for tagged message and RMA support.  An application can open a transmit context with only tagged message support, and another context with only RMA support.
+
 ## Resource Bindings
 
 Before an endpoint can be used for data transfers, it must be associated with other resources, such as completion queues, counters, address vectors, or event queues. Resource bindings must be done prior to enabling an endpoint.  All active endpoints must be bound to completion queues.  Unconnected endpoints must be associated with an address vector.  Passive and connection-oriented endpoints must be bound to an event queue.  The resource binding requirements are cumulative: for example, an RDM endpoint must be bound to completion queues and address vectors.
