@@ -1292,7 +1292,7 @@ struct fi_cq_msg_entry {
 };
 ```
 
-Once the format has been selected, the underlying provider will assume that read operations against the CQ will pass in an array of the corresponding structure.
+Once the format has been selected, the underlying provider will assume that read operations against the CQ will pass in an array of the corresponding structure.  The CQ data formats are designed such that a structure that reports more information can be cast to one that reports less.
 
 #### CQ Wait Object
 
@@ -1301,7 +1301,37 @@ Wait objects are a way for an application to suspend execution until it has been
 Applications that need to wait on other resources, such as open file handles or sockets, can request that a specific wait object be used. The most common alternative to FI_WAIT_UNSPEC is FI_WAIT_FD. This associates a file descriptor with the CQ. The file descriptor may be retrieved from the CQ using an fi_control() operation, and can be passed to standard operating system calls, such as select() or poll().
 
 ### Reading Completions
+
+Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
+
+FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE. 
+
 ### Retrieving Errors
+
+Because the selected completion structure is insufficient to report all data necessary to debug or handle an operation that completes in error, failed operations are reported using a separate fi_cq_readerr() function.  This call takes as input a CQ error entry structure, which allows the provider to report more information regarding the reason for the failure.
+
+
+```
+
+fi_cq_readerr(struct fid_cq *cq, struct fi_cq_err_entry *buf, uint64_t flags);
+
+struct fi_cq_err_entry {
+    void      *op_context;
+    uint64_t  flags;
+    size_t    len;
+    void      *buf;
+    uint64_t  data;
+    uint64_t  tag;
+    size_t    olen;
+    int       err;
+    int       prov_errno;
+    void     *err_data;
+};
+```
+
+A fabric error code regarding the failure is reported as the err field.  A provider specific error code is also available through the prov_errno field.  This field can be decoded into a displayable string using the fi_cq_strerror() routine. The err_data field is provider specific data that assists the provider in decoding the reason for the failure.
+
+
 ## Counters
 ### Checking Value
 ### Error Reporting
