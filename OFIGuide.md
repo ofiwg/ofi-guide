@@ -1253,6 +1253,38 @@ Transmit and receive contexts are each associated with their own completion queu
 CQs are allocated separately from endpoints and are associated with endpoints through the fi_ep_bind() function. 
 
 ### Attributes
+
+The properties of a completion queue are specified using the fi_cq_attr structure:
+
+```
+struct fi_cq_attr {    size_t                size;    uint64_t              flags;    enum fi_cq_format     format;    enum fi_wait_obj      wait_obj;    int                   signaling_vector;    enum fi_cq_wait_cond  wait_cond;    struct fid_wait       *wait_set;};
+```
+
+Select details are described below.
+
+#### CQ Size
+
+The CQ size is the number of entries that the CQ can store before being overrun. If resource management is disabled, then the application is responsible for ensuring that it does not submit more operations than the CQ can store. When selecting an appropriate size for a CQ, developers should consider the size of all transmit and receive contexts that insert completions into the CQ.
+
+Because CQs often map to hardware constructs, their size may be limited to a pre-set maximum. Applications should be prepared to allocated multiple CQs if they make use of a lot of endpoints –- a connection-oriented server application, for example. Applications should size the CQ correctly to avoid wasting system resources, while still protecting against queue overruns.
+
+#### CQ Format
+
+In order to minimize the amount of data that a provider must report, the type of completion data written back to the application is selectable. This limits the number of bytes the provider writes to memory, and allows necessary completion data to fit into a compact structure. Each CQ format maps to a specific completion structure. Developers should analyze each structure, select the smallest structure that contains all of the data it requires, and specify the corresponding enum value as the CQ format.
+
+For example, if an application only needs to know which request completed, along with the size of a received message, it can select the following:
+
+```cq_attr->format = FI_CQ_FORMAT_MSG;
+struct fi_cq_msg_entry {    void      *op_context;    uint64_t  flags;    size_t    len;};```
+
+Once the format has been selected, the underlying provider will assume that read operations against the CQ will pass in an array of the corresponding structure.
+
+#### CQ Wait Object
+
+Wait objects are a way for an application to suspend execution until it has been notified that a completion is ready to be retrieved from the CQ. The use of wait objects is recommended over busy waiting (polling) techniques for most applications. CQs include calls (fi_cq_sread() – for synchronous read) that will block until a completion occurs. Applications that will only use the libfabric blocking calls should select FI_WAIT_UNSPEC as their wait object. This allows the provider to select an object that is optimal for its implementation.
+
+Applications that need to wait on other resources, such as open file handles or sockets, can request that a specific wait object be used. The most common alternative to FI_WAIT_UNSPEC is FI_WAIT_FD. This associates a file descriptor with the CQ. The file descriptor may be retrieved from the CQ using an fi_control() operation, and can be passed to standard operating system calls, such as select() or poll().
+
 ### Reading Completions
 ### Retrieving Errors
 ## Counters
