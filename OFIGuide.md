@@ -1257,7 +1257,15 @@ CQs are allocated separately from endpoints and are associated with endpoints th
 The properties of a completion queue are specified using the fi_cq_attr structure:
 
 ```
-struct fi_cq_attr {    size_t                size;    uint64_t              flags;    enum fi_cq_format     format;    enum fi_wait_obj      wait_obj;    int                   signaling_vector;    enum fi_cq_wait_cond  wait_cond;    struct fid_wait       *wait_set;};
+struct fi_cq_attr {
+    size_t                size;
+    uint64_t              flags;
+    enum fi_cq_format     format;
+    enum fi_wait_obj      wait_obj;
+    int                   signaling_vector;
+    enum fi_cq_wait_cond  wait_cond;
+    struct fid_wait       *wait_set;
+};
 ```
 
 Select details are described below.
@@ -1274,8 +1282,15 @@ In order to minimize the amount of data that a provider must report, the type of
 
 For example, if an application only needs to know which request completed, along with the size of a received message, it can select the following:
 
-```cq_attr->format = FI_CQ_FORMAT_MSG;
-struct fi_cq_msg_entry {    void      *op_context;    uint64_t  flags;    size_t    len;};```
+```
+cq_attr->format = FI_CQ_FORMAT_MSG;
+
+struct fi_cq_msg_entry {
+    void      *op_context;
+    uint64_t  flags;
+    size_t    len;
+};
+```
 
 Once the format has been selected, the underlying provider will assume that read operations against the CQ will pass in an array of the corresponding structure.
 
