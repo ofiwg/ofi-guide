@@ -1310,11 +1310,11 @@ FI_SOURCE requires that the provider use the source address available in the raw
 
 Because the selected completion structure is insufficient to report all data necessary to debug or handle an operation that completes in error, failed operations are reported using a separate fi_cq_readerr() function.  This call takes as input a CQ error entry structure, which allows the provider to report more information regarding the reason for the failure.
 
-
 ```
-
+/* read error prototype */
 fi_cq_readerr(struct fid_cq *cq, struct fi_cq_err_entry *buf, uint64_t flags);
 
+/* error data structure */
 struct fi_cq_err_entry {
     void      *op_context;
     uint64_t  flags;
@@ -1327,10 +1327,18 @@ struct fi_cq_err_entry {
     int       prov_errno;
     void     *err_data;
 };
+
+/* Sample error handling */
+struct fi_cq_msg_entry entry;
+struct fi_cq_err_entry err_entry;
+int ret;
+
+ret = fi_cq_read(cq, &entry, 1);
+if (ret == -FI_EAVAIL)
+    ret = fi_cq_readerr(cq, &err_entry, 0);
 ```
 
 A fabric error code regarding the failure is reported as the err field.  A provider specific error code is also available through the prov_errno field.  This field can be decoded into a displayable string using the fi_cq_strerror() routine. The err_data field is provider specific data that assists the provider in decoding the reason for the failure.
-
 
 ## Counters
 ### Checking Value
