@@ -1243,6 +1243,15 @@ Delivery complete indicates that the results of the operation are available to a
 Applications can request a default completion mode when opening an endpoint by setting one of the above mentioned complete flags as an op_flags for the context’s attributes. However, it is usually recommended that application use the provider’s default flags for best performance, and amend its protocol to achieve its completion semantics. For example, many applications will perform a ‘finalize’ or ‘commit’ procedure as part of their operation, which synchronizes the processing of all peers and guarantees that all previously sent data has been received.
 
 ## CQs
+
+Completion queues often map directly to provider hardware mechanisms, and libfabric is designed around minimizing the software impact of accessing those mechanisms. Unlike other objects discussed so far (fabrics, domains, endpoints), completion queues are not part of the fi_info structure or involved with the fi_getinfo() call.
+
+All active endpoints must be bound with one or more completion queues. This is true even if completions will be suppressed by the application (e.g. using the FI_SELECTIVE_COMPLETION flag). Completion queues are needed to report operations that complete in error.
+
+Transmit and receive contexts are each associated with their own completion queue. An endpoint may direct transmit and receive completions to separate CQs or to the same CQ. For applications, using a single CQ reduces system resource utilization. While separating completions to different CQs could simplify code maintenance or improve multi-threading execution. A CQ may be shared among multiple endpoints.
+
+CQs are allocated separately from endpoints and are associated with endpoints through the fi_ep_bind() function. 
+
 ### Attributes
 ### Reading Completions
 ### Retrieving Errors
