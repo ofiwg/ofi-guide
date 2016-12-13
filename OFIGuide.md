@@ -153,7 +153,7 @@ The flow for receiving data is similar to that used to send it.  Because of the 
 
 ## Connection-less (UDP) Communication
 
-<TO DO>
+TODO
 
 ## Advantages
 
@@ -601,7 +601,12 @@ Because transmit and receive contexts may be associated with limited hardware re
 Completions are still associated with the endpoints, with each endpoint being associated with their own completion queue(s).
 
 ### Receive Contexts
+
+TODO
+
 ### Transmit Contexts
+
+TODO
 
 ## Scalable Endpoints
 
@@ -1049,6 +1054,7 @@ if (!cm_entry.info->domain_attr->domain)
     fi_domain(fabric, cm_entry.info, &domain, NULL);
 fi_endpoint(domain, cm_entry.info, &ep, NULL);
 
+/* See the resource binding section below for details on associated fabric objects */
 fi_ep_bind(ep, &eq->fid, 0);
 fi_cq_open(domain, &tx_cq_attr, &tx_cq, NULL);
 fi_ep_bind(ep, &tx_cq->fid, FI_TRANSMIT);
@@ -1070,16 +1076,262 @@ To accept the connection, the application calls fi_accept().  Note that because 
 The fi_eq_sread() calls are blocking (synchronous) read calls to the event queue.  These calls wait until an event occurs, which in this case are connection request and establishment events.
 
 ## Scalable
+
+For most applications, an endpoint consists of a transmit and receive context associated with a single address.  The transmit and receive contexts often map to hardware command queues.  For multi-threaded applications, access to these hardware queues requires serialization, which can lead to them becoming bottlenecks.  Scalable endpoints were created to address this.
+
+A scalable endpoint is an endpoint that has multiple transmit and/or receive contexts associated with it.  As an example, consider an application that allocates a total of four processing threads.  By assigning each thread its own transmit context, the application can avoid serializing (i.e. locking) access to hardware queues.
+
+The advantage of using a scalable endpoint over allocating multiple traditional endpoints is reduced addressing footprint.  A scalable endpoint has a single address, regardless of how many transmit or receive contexts it may have.
+
+Support for scalable endpoints is provider specific, with support indicated by the domain attributes:
+
+```
+struct fi_domain_attr {
+    ...
+    size_t max_ep_tx_ctx;
+    size_t max_ep_rx_ctx;
+    ...
+```
+
+The above fields indicates the maximum number of transmit and receive contexts, respectively, that may be associated with a single endpoint.  One or both of these values will be greater than one if scalable endpoints are supported.  Applications can configure and allocate a scalable endpoint using the fi_scalable_ep call:
+
+```
+/* Set the required number of transmit of receive contexts
+ * These must be <= the domain maximums listed above.
+ * This will usually be set prior to caling fi_getinfo
+ */
+struct fi_info *hints, *info;
+struct fid_domain *domain;
+struct fid_ep *scalable_ep, *tx_ctx[4], *rx_ctx[2];
+
+hints = fi_allocinfo();
+...
+
+/* A scalable endpoint requires > 1 Tx or Rx queue */
+hints->ep_attr->tx_ctx_cnt = 4;
+hints->ep_attr->rx_ctx_cnt = 2;
+
+/* Call fi_getinfo and open fabric, domain, etc. */
+
+fi_scalable_ep(domain, info, &sep, NULL);
+```
+
+The above example opens an endpoint with four transmit and two receive contexts.  However, a scalable endpoint only needs to be scalable in one dimension -- transmit or receive.  For example, it could use multiple transmit contexts, but only require a single receive contexts.  It could even use a shared context, if desired.
+
+Submitting data transfer operations to a scalable endopint is more involved.  First, if the endpoint only has a single transmit context, then all transmit operations are posted directly to the scalable endpoint, the same as if a traditional endpoint were used.  Likewise, if the endpoint only has a single receive context, then all receive operations are posted directly to the scalable endpoint.  An additional step is needed before posting operations to one of many contexts (that is the 'scalable' portion of the endpoint).  The desired context must first be retrieved:
+
+```
+/* Retrieve the first (index 0) transmit and receive contexts */
+fi_tx_context(scalable_ep, 0, info->tx_attr, &tx_ctx[0], &tx_ctx[0]);
+fi_rx_context(scalable_ep, 0, info->rx_attr, &rx_ctx[0], &rx_ctx[0]);
+```
+
+Data transfer operations are then posted to the tx_ctx or rx_ctx.  It should be noted that although the scalable endpoint, transmit context, and receive context are all of type fid_ep, attempting to submit a data transfer operation against the wrong object will result in an error.
+
+Be default all transmit and receive contexts belonging to a scalable endpoint are similar with respect to other transmit and receive contexts.  However, applications can request that a context have fewer capabilities than what was requested for the scalable endpoint.  This allows the provider to configure its hardware resources for optimal performance.  For example, a scalable endpoint may be configured for tagged message and RMA support.  An application can open a transmit context with only tagged message support, and another context with only RMA support.
+
 ## Resource Bindings
+
+Before an endpoint can be used for data transfers, it must be associated with other resources, such as completion queues, counters, address vectors, or event queues. Resource bindings must be done prior to enabling an endpoint.  All active endpoints must be bound to completion queues.  Unconnected endpoints must be associated with an address vector.  Passive and connection-oriented endpoints must be bound to an event queue.  The resource binding requirements are cumulative: for example, an RDM endpoint must be bound to completion queues and address vectors.
+
+Resources are associated with endpoints using a bind operation:
+
+```
+int fi_ep_bind(struct fid_ep *ep, struct fid *fid, uint64_t flags);
+int fi_scalable_ep_bind(struct fid_ep *sep, struct fid *fid, uint64_t flags);
+int fi_pep_bind(struct fid_pep *pep, struct fid *fid, uint64_t flags);
+```
+
+The bind functions are similar to each other (and may to the same fi_bind call internally).  Flags are used to indicate how the resources should be associated.  The passive endpoint section above shows an example of binding an passive and active endpoints to event and completion queues.
+
 ## EP Attributes
-## Rx Attributes
-## Tx Attributes
+
+The properties of an endpoint are specified using endpoint attributes.  These may be set as hints passed into the fi_getinfo call.  Unset values will be filled out by the provider.
+```
+struct fi_ep_attr {
+    enum fi_ep_type type;
+    uint32_t        protocol;
+    uint32_t        protocol_version;
+    size_t          max_msg_size;
+    size_t          msg_prefix_size;
+    size_t          max_order_raw_size;
+    size_t          max_order_war_size;
+    size_t          max_order_waw_size;
+    uint64_t        mem_tag_format;
+    size_t          tx_ctx_cnt;
+    size_t          rx_ctx_cnt;
+};
+```
+
+A full description of each field is available in the libfabic man pages, with selected details listed below.
+
+### Endpoint Type
+
+This indicates the type of endpoint: reliable datagram (FI_EP_RDM), reliable-connected (FI_EP_MSG), or unreliable datagram (DGRAM).  Nearly all applications will need to specify the endpoint type as a hint passed into fi_getinfo, as most applications will only be coded to support a single endpoint type.
+
+### Maximum Message Size
+
+This size is the maximum size for any data transfer operation that goes over the endpoint. For unreliable datagram endpoints, this is often the MTU of the underlying network. For reliable endpoints, this value is often a restriction of the underlying transport protocol. Applications that require transfers larger than the maximum reported size are required to break up a single, large transfer into multiple operations.
+
+Providers expose their hardware or network limits to the applications, rather than segmenting large transfers internally, in order to minimize completion overhead. For example, for a provider to support large message segmentation internally, it would need to emulate all completion mechanisms (queues and counters) in software, even larger transfers were never used.
+
+### Message Order Size
+
+This field specifies data ordering. It defines the delivery order of transport data into target memory for RMA and atomic operations. Data ordering requires message ordering.
+
+For example, suppose that an application issues two RMA write operations to the same target memory location. (The application may be writing a time stamp value every time a local condition is met, for instance). Message ordering indicates that the first write as initiated by the sender is the first write processed by the receiver. Data ordering states whether the _data_ from the first write updates memory before the second write updates memory.
+
+The max_order_xxx_size fields indicate how large a message may be while still achieving data ordering. If a field is 0, then no data ordering is guaranteed. If a field is the same as the max_msg_size, then data order is guaranteed for all messages.
+
+It is common for providers to support data ordering up to max_msg_size for back to back operations that are the same. For example, an RMA write followed by an RMA write may have data ordering regardless of the size of the data transfer (max_order_waw_size = max_msg_size). Mixed operations, such as a read followed by a write, are often more restricted. This is because RMA read operations may require acknowledgements from the _initiator_, which impacts the retransmission protocol.
+
+For example, consider an RMA read followed by a write. The target will process the read request, retrieve the data, and send a reply. While that is occurring, a write is received that wants to update the same memory location accessed by the read. If the target processes the write, it will overwrite the memory used by the read. If the read response is lost, and the read is retried, the target will be unable to re-send the data. To handle this, the target either needs to: defer handling the write until it receives an acknowledgement for the read response, buffer the read response so it can be retransmitted, or indicate that data ordering is not guaranteed.
+
+Because the read or write operation may be gigabytes in size, deferring the write may add significant latency, and buffering the read response may be impractical. The max_order_xxx_size fields indicate how large back to back operations may be with ordering still maintained. In many cases, read after write and write and read ordering may be significantly limited, but still usable for implementing specific algorithms, such as a global locking mechanism.
+
+## Rx/Tx Context Attributes
+
+The endpoint attributes define the overall abilities for the endpoint; however, attributes that apply specifically to receive or transmit contexts are defined by struct fi_rx_attr and fi_tx_attr, respectively:
+
+```
+struct fi_rx_attr {
+    uint64_t caps;
+    uint64_t mode;
+    uint64_t op_flags;
+    uint64_t msg_order;
+    uint64_t comp_order;
+    size_t total_buffered_recv;
+    size_t size;
+    size_t iov_limit;
+};
+
+struct fi_tx_attr {
+    uint64_t caps;
+    uint64_t mode;
+    uint64_t op_flags;
+    uint64_t msg_order;
+    uint64_t comp_order;
+    size_t inject_size;
+    size_t size;
+    size_t iov_limit;
+    size_t rma_iov_limit;
+};
+```
+
+Context capabilities must be a subset of the endpoint capabilities. For many applications, the default attributes returned by the provider will be sufficient, with the application only needing to specify endpoint attributes.
+
+Both context attributes include an op_flags field. This field is used by applications to specify the default operation flags to use with any call. For example, by setting the transmit context’s op_flags to FI_INJECT, the application has indicated to the provider that all transmit operations should assume ‘inject’ behavior is desired. (I.e. the buffer provided to the call must be returned to the application upon return from the function). The op_flags applies to all operations that do not provide flags as part of the call (e.g. fi_sendmsg).
+
+It should be noted that some attributes are dependent upon the peer endpoint having supporting attributes in order to achieve correct application behavior. For example, message order must be the compatible between the initiator’s transmit attributes and the target’s receive attributes. Any mismatch may result in incorrect behavior that could be difficult to debug.
 
 # Completions
+
+Data transfer operations complete asynchronously. Libfabric defines two mechanism by which an application can be notified that an operation has completed: completion queues and counters.
+
+Regardless of which mechanism is used to notify the application that an operation is done, developers must be aware of what a completion indicates.
+
+In all cases, a completion indicates that it is safe to reuse the buffer(s) associated with the data transfer. This completion mode is referred to as inject complete and corresponds to the operational flags FI_INJECT_COMPLETE. However, a completion may also guarantee stronger semantics.
+
+Although libfabric does not define an implementation, a provider can meet the requirement for inject complete by copying the application’s buffer into a network buffer before generating the completion. Even if the transmit operation is lost and must be retried, the provider can resend the original data from the copied location. For large transfers, a provider may not mark a request as inject complete until the data has been acknowledged by the target. Applications, however, should only infer that it is safe to reuse their data buffer for an inject complete operation.
+
+Transmit complete is a completion mode that provides slightly stronger guarantees to the application. The meaning of transmit complete depends on whether the endpoint is reliable or unreliable. For an unreliable endpoint (FI_EP_DGRAM), a transmit completion indicates that the request has been delivered to the network. That is, the message has left the local NIC. For reliable endpoints, a transmit complete occurs when the request has reached the target endpoint. Typically, this indicates that the target has acked the request. Transmit complete maps to the operation flag FI_TRANSMIT_COMPLETE.
+
+A third completion mode is defined to provide guarantees beyond transmit complete. With transmit complete, an application knows that the message is no longer dependent on the local NIC or network (e.g. switches). However, the data may be buffered at the remote NIC and has not necessarily been written to the target memory. As a result, data sent in the request may not be visible to all processes. The third completion mode is delivery complete.
+
+Delivery complete indicates that the results of the operation are available to all processes on the fabric. The distinction between transmit and delivery complete is subtle, but important. It often deals with _when_ the target endpoint generates an acknowledgement to a message. For providers that offload transport protocol to the NIC, support for transmit complete is common. Delivery complete guarantees are more easily met by providers that implement portions of their protocol on the host processor. Delivery complete corresponds to the FI_DELIVERY_COMPLETE operation flag.
+
+Applications can request a default completion mode when opening an endpoint by setting one of the above mentioned complete flags as an op_flags for the context’s attributes. However, it is usually recommended that application use the provider’s default flags for best performance, and amend its protocol to achieve its completion semantics. For example, many applications will perform a ‘finalize’ or ‘commit’ procedure as part of their operation, which synchronizes the processing of all peers and guarantees that all previously sent data has been received.
+
 ## CQs
+
+Completion queues often map directly to provider hardware mechanisms, and libfabric is designed around minimizing the software impact of accessing those mechanisms. Unlike other objects discussed so far (fabrics, domains, endpoints), completion queues are not part of the fi_info structure or involved with the fi_getinfo() call.
+
+All active endpoints must be bound with one or more completion queues. This is true even if completions will be suppressed by the application (e.g. using the FI_SELECTIVE_COMPLETION flag). Completion queues are needed to report operations that complete in error.
+
+Transmit and receive contexts are each associated with their own completion queue. An endpoint may direct transmit and receive completions to separate CQs or to the same CQ. For applications, using a single CQ reduces system resource utilization. While separating completions to different CQs could simplify code maintenance or improve multi-threading execution. A CQ may be shared among multiple endpoints.
+
+CQs are allocated separately from endpoints and are associated with endpoints through the fi_ep_bind() function. 
+
 ### Attributes
+
+The properties of a completion queue are specified using the fi_cq_attr structure:
+
+```
+struct fi_cq_attr {
+    size_t                size;
+    uint64_t              flags;
+    enum fi_cq_format     format;
+    enum fi_wait_obj      wait_obj;
+    int                   signaling_vector;
+    enum fi_cq_wait_cond  wait_cond;
+    struct fid_wait       *wait_set;
+};
+```
+
+Select details are described below.
+
+#### CQ Size
+
+The CQ size is the number of entries that the CQ can store before being overrun. If resource management is disabled, then the application is responsible for ensuring that it does not submit more operations than the CQ can store. When selecting an appropriate size for a CQ, developers should consider the size of all transmit and receive contexts that insert completions into the CQ.
+
+Because CQs often map to hardware constructs, their size may be limited to a pre-set maximum. Applications should be prepared to allocated multiple CQs if they make use of a lot of endpoints –- a connection-oriented server application, for example. Applications should size the CQ correctly to avoid wasting system resources, while still protecting against queue overruns.
+
+#### CQ Format
+
+In order to minimize the amount of data that a provider must report, the type of completion data written back to the application is selectable. This limits the number of bytes the provider writes to memory, and allows necessary completion data to fit into a compact structure. Each CQ format maps to a specific completion structure. Developers should analyze each structure, select the smallest structure that contains all of the data it requires, and specify the corresponding enum value as the CQ format.
+
+For example, if an application only needs to know which request completed, along with the size of a received message, it can select the following:
+
+```
+cq_attr->format = FI_CQ_FORMAT_MSG;
+
+struct fi_cq_msg_entry {
+    void      *op_context;
+    uint64_t  flags;
+    size_t    len;
+};
+```
+
+Once the format has been selected, the underlying provider will assume that read operations against the CQ will pass in an array of the corresponding structure.  The CQ data formats are designed such that a structure that reports more information can be cast to one that reports less.
+
+#### CQ Wait Object
+
+Wait objects are a way for an application to suspend execution until it has been notified that a completion is ready to be retrieved from the CQ. The use of wait objects is recommended over busy waiting (polling) techniques for most applications. CQs include calls (fi_cq_sread() – for synchronous read) that will block until a completion occurs. Applications that will only use the libfabric blocking calls should select FI_WAIT_UNSPEC as their wait object. This allows the provider to select an object that is optimal for its implementation.
+
+Applications that need to wait on other resources, such as open file handles or sockets, can request that a specific wait object be used. The most common alternative to FI_WAIT_UNSPEC is FI_WAIT_FD. This associates a file descriptor with the CQ. The file descriptor may be retrieved from the CQ using an fi_control() operation, and can be passed to standard operating system calls, such as select() or poll().
+
 ### Reading Completions
+
+Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
+
+FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE. 
+
 ### Retrieving Errors
+
+Because the selected completion structure is insufficient to report all data necessary to debug or handle an operation that completes in error, failed operations are reported using a separate fi_cq_readerr() function.  This call takes as input a CQ error entry structure, which allows the provider to report more information regarding the reason for the failure.
+
+
+```
+
+fi_cq_readerr(struct fid_cq *cq, struct fi_cq_err_entry *buf, uint64_t flags);
+
+struct fi_cq_err_entry {
+    void      *op_context;
+    uint64_t  flags;
+    size_t    len;
+    void      *buf;
+    uint64_t  data;
+    uint64_t  tag;
+    size_t    olen;
+    int       err;
+    int       prov_errno;
+    void     *err_data;
+};
+```
+
+A fabric error code regarding the failure is reported as the err field.  A provider specific error code is also available through the prov_errno field.  This field can be decoded into a displayable string using the fi_cq_strerror() routine. The err_data field is provider specific data that assists the provider in decoding the reason for the failure.
+
+
 ## Counters
 ### Checking Value
 ### Error Reporting
