@@ -1394,25 +1394,15 @@ Address vectors are associated with domain objects. This allows providers to imp
 Address vectors are created with the following attributes. Select attribute details are discussed below:
 
 ```
-
- struct fi_av_attr {
-
- enum fi_av_type type;
-
- int rx_ctx_bits;
-
- size_t count;
-
- size_t ep_per_node;
-
- const char *name;
-
- void *map_addr;
-
- uint64_t flags;
-
+struct fi_av_attr {
+    enum fi_av_type type;
+    int rx_ctx_bits;
+    size_t count;
+    size_t ep_per_node;
+    const char *name;
+    void *map_addr;
+    uint64_t flags;
 };
-
 ```
 
 ### AV Type
@@ -1430,9 +1420,7 @@ The rx_ctx_bits allocates a specific number of bits out of the fi_addr_t value t
 The function fi_rx_addr() converts a target fi_addr_t address, along with the requested receive context index, into a new fi_addr_t value that may be used to transfer data to a scalable endpoint’s receive context.
 
 ```
-
 fi_addr_t fi_rx_addr(fi_addr_t fi_addr, int rx_index, int rx_ctx_bits);
-
 ```
 
 This call is simply a wrapper that writes the rx_index into the space that was reserved in the fi_addr_t value.
