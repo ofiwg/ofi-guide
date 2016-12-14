@@ -1341,8 +1341,54 @@ if (ret == -FI_EAVAIL)
 A fabric error code regarding the failure is reported as the err field.  A provider specific error code is also available through the prov_errno field.  This field can be decoded into a displayable string using the fi_cq_strerror() routine. The err_data field is provider specific data that assists the provider in decoding the reason for the failure.
 
 ## Counters
-### Checking Value
-### Error Reporting
+
+Completion counters are conceptually very simple completion queues that return the number of completions that have occurred on an endpoint.  No other details about the completion is available.  Counters work well for connection-oriented applications that make use of strict completion ordering (rx/tx attribute comp_order = FI_ORDER_STRICT), or applications that need to collect a specific number of responses from peers.
+
+An endpoint has more flexibility with how many counters it can use relative to completion queues.  Different types of operations can update separate counters.  For instance, sent messages can update one counter, while RMA writes can update another.  This allows for simple, yet powerful usage models, as control message completions can be tracked independently from large data transfers.  Counters are associated with active endpoints using the fi_ep_bind() call:
+
+```
+/* Example binding a counter to an endpoint.
+ * The counter will update on completion of any transmit operation.
+ */
+fi_ep_bind(ep, cntr, FI_SEND | FI_WRITE | FI_READ);
+```
+
+
+Counters are defined such that they can be implemented either in hardware or in software, by layering over a hardware completion queue.  Even when implemented in software, counter use can improve performance by reducing the amount of completion data that is reported.  Additionally, providers may be able to optimize how a counter is updated, relative to an application counting the same type of events.  For example, a provider may be able to compare the head and tail pointers of a queue to determine the total number of completions that are available, allowing a single write to update a counter, rather than repeatedly incrementing a counter variable once for each completion.
+
+### Attributes
+
+
+Most counter attributes are a subset of the CQ attributes:
+
+
+```
+struct fi_cntr_attr {
+    enum fi_cntr_events  events;
+    enum fi_wait_obj     wait_obj;
+    struct fid_wait      *wait_set;
+    uint64_t             flags;
+};
+```
+
+
+The sole exception is the events field, which must be set to FI_CNTR_EVENTS_COMP, indicating that completion events are being counted.  (This field is defined for future extensibility).  A completion counter is updated according to the completion model that was selected by the endpoint.  For example, if an endpoint is configured to for transmit complete, the counter will not be updated until the transfer has been received by the target endpoint.
+
+
+### Counter Values
+
+
+A completion counter is actually comprised of two different values.  One represents the number of operations that complete successfully.  The other indicates the number of operations which completed in error.  Counters do not provide any additional information about the type of error, nor indicate which operation failed.  Details of errors must be retrieved from a completion queue.
+
+
+Reading a counter’s values is straightforward:
+
+
+```
+uint64_t fi_cntr_read(struct fid_cntr *cntr);
+uint64_t fi_cntr_readerr(struct fid_cntr *cntr);
+```
+
 
 # Address Vectors
 ## Types
