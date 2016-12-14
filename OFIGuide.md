@@ -1353,14 +1353,11 @@ An endpoint has more flexibility with how many counters it can use relative to c
 fi_ep_bind(ep, cntr, FI_SEND | FI_WRITE | FI_READ);
 ```
 
-
 Counters are defined such that they can be implemented either in hardware or in software, by layering over a hardware completion queue.  Even when implemented in software, counter use can improve performance by reducing the amount of completion data that is reported.  Additionally, providers may be able to optimize how a counter is updated, relative to an application counting the same type of events.  For example, a provider may be able to compare the head and tail pointers of a queue to determine the total number of completions that are available, allowing a single write to update a counter, rather than repeatedly incrementing a counter variable once for each completion.
 
 ### Attributes
 
-
 Most counter attributes are a subset of the CQ attributes:
-
 
 ```
 struct fi_cntr_attr {
@@ -1371,24 +1368,18 @@ struct fi_cntr_attr {
 };
 ```
 
-
 The sole exception is the events field, which must be set to FI_CNTR_EVENTS_COMP, indicating that completion events are being counted.  (This field is defined for future extensibility).  A completion counter is updated according to the completion model that was selected by the endpoint.  For example, if an endpoint is configured to for transmit complete, the counter will not be updated until the transfer has been received by the target endpoint.
-
 
 ### Counter Values
 
-
 A completion counter is actually comprised of two different values.  One represents the number of operations that complete successfully.  The other indicates the number of operations which completed in error.  Counters do not provide any additional information about the type of error, nor indicate which operation failed.  Details of errors must be retrieved from a completion queue.
 
-
 Reading a counter’s values is straightforward:
-
 
 ```
 uint64_t fi_cntr_read(struct fid_cntr *cntr);
 uint64_t fi_cntr_readerr(struct fid_cntr *cntr);
 ```
-
 
 # Address Vectors
 ## Types
