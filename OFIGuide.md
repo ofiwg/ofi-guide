@@ -1382,10 +1382,69 @@ uint64_t fi_cntr_readerr(struct fid_cntr *cntr);
 ```
 
 # Address Vectors
-## Types
-## Address Formats
-## Insertion Methods
-## Sharing Addressing Data with other Processes
+
+A primary goal of address vectors is to allow applications to communicate with thousands to millions of peers while minimizing the amount of data needed to store peer addressing information. It pushes fabric specific addressing details away from the application to the provider. This allows the provider to optimize how it converts addresses into routing data, and enables data compression techniques that may be difficult for an application to achieve without being aware of low-level fabric addressing details. For example, providers may be able to algorithmically calculate addressing components, rather than storing the data locally. Additionally, providers can communicate with resource management entities or fabric manager agents to obtain quality of service or other information about the fabric, in order to improve network utilization.
+
+An equally important objective is ensuring that the resulting interfaces, particularly data transfer operations, are fast and easy to use. Conceptually, an address vector converts an endpoint address into an fi_addr_t. The fi_addr_t (fabric interface address datatype) is a 64-bit value that is used in all ‘fast-path’ operations – data transfers and completions.
+
+Address vectors are associated with domain objects. This allows providers to implement portions of an address vector, such as quality of service mappings, in hardware.
+
+## AV Attributes
+
+Address vectors are created with the following attributes. Select attribute details are discussed below:
+
+```
+
+ struct fi_av_attr {
+
+ enum fi_av_type type;
+
+ int rx_ctx_bits;
+
+ size_t count;
+
+ size_t ep_per_node;
+
+ const char *name;
+
+ void *map_addr;
+
+ uint64_t flags;
+
+};
+
+```
+
+### AV Type
+
+There are two types of address vectors. The type refers to the format of the returned fi_addr_t values for addresses that are inserted into the AV. With type FI_AV_TABLE, returned addresses are simple indices, and developers may think of the AV as an array of addresses. Each address that is inserted into the AV is mapped to the index of the next free array slot. The advantage of FI_AV_TABLE is that applications can refer to peers using a simple index, eliminating an application’s need to store any addressing data. This type maps well to applications such as MPI, where a peer is referenced by rank.
+
+The second type is FI_AV_MAP. This type does not define any specific format for the fi_addr_t value. Applications that use type map are required to provide the correct fi_addr_t for a given peer when issuing a data transfer operation. The advantage of FI_AV_MAP is that a provider can use the fi_addr_t to encode the target’s address, which avoids retrieving the data from memory. As a simple example, consider a fabric that uses TCP/IPv4 based addressing. An fi_addr_t is large enough to contain the address, which allows a provider to copy the data from the fi_addr_t directly into an outgoing packet.
+
+### AV Rx Context Bits
+
+The rx_ctx_bits field is only used with scalable endpoints with named received contexts, and is best described using an example. A peer process has allocated a scalable endpoint with two receive contexts. The first receive context will be used for control message, with data messages targeting the second context. Named contexts is a feature that allows the initiator to select which context will receive a message. If the initiating application wishes to send a data message, it must indicate that the message should be steered to the second context.
+
+The rx_ctx_bits allocates a specific number of bits out of the fi_addr_t value that will be used to indicate which context a given operation will target. Applications should reserve a number of bits large enough to indicate any context at the target. For example, two bits is sufficient to target one of four different receive contexts.
+
+The function fi_rx_addr() converts a target fi_addr_t address, along with the requested receive context index, into a new fi_addr_t value that may be used to transfer data to a scalable endpoint’s receive context.
+
+```
+
+fi_addr_t fi_rx_addr(fi_addr_t fi_addr, int rx_index, int rx_ctx_bits);
+
+```
+
+This call is simply a wrapper that writes the rx_index into the space that was reserved in the fi_addr_t value.
+
+### Sharing AVs Between Processes
+
+Large scale parallel programs typically run with multiple processes allocated on each node. Because these processes communicate with the same set of peers, the addressing data needed by each process is the same. Libfabric defines a mechanism by which processes running on the same node may share their address vectors. This allows a system to maintain a single copy of addressing data, rather than one copy per process.
+
+Although libfabric does not require any implementation for how an address vector is shared, the interfaces map well to using shared memory. Address vectors which will be shared are given an application specific name. How an application selects a name that avoid conflicts with unrelated processes, or how it communicates the name with peer processes is outside the scope of libfabric.
+
+In addition to having a name, a shared AV also has a base map address -- map_addr. Use of map_addr is only important for address vectors that are of type FI_AV_MAP, and allows applications to share fi_addr_t values. From the viewpoint of the application, the map_addr is the base value for all fi_addr_t values. A common use for map_addr is for the process that creates the initial address vector to request a value from the provider, exchange the returned map_addr with its peers, and for the peers to open the shared AV using the same map_addr. This allows the fi_addr_t values to be stored in shared memory that is accessible by all peers.
+
 
 # Wait and Poll Sets
 ## Blocking on events
