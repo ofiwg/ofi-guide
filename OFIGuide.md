@@ -1497,8 +1497,6 @@ Although libfabric does not require any implementation for how an address vector
 
 In addition to having a name, a shared AV also has a base map address -- map_addr. Use of map_addr is only important for address vectors that are of type FI_AV_MAP, and allows applications to share fi_addr_t values. From the viewpoint of the application, the map_addr is the base value for all fi_addr_t values. A common use for map_addr is for the process that creates the initial address vector to request a value from the provider, exchange the returned map_addr with its peers, and for the peers to open the shared AV using the same map_addr. This allows the fi_addr_t values to be stored in shared memory that is accessible by all peers.
 
-
-
 # Wait and Poll Sets
 
 As mentioned, most libfabric operations involve asynchronous processing, with completions reported to event queues, completion queues, and counters. Wait sets and poll sets were created to help manage and optimize checking for completed requests across multiple objects.
@@ -1512,61 +1510,35 @@ A wait set is similar to a poll set, and is often be used in conjunction with on
 The poll set API is fairly straightforward.
 
 ```
-
 int fi_poll_open(struct fid_domain *domain, struct fi_poll_attr *attr,
-
- struct fid_poll **pollset);
-
+    struct fid_poll **pollset);
 int fi_poll_add(struct fid_poll *pollset, struct fid *event_fid,
-
- uint64_t flags);
-
+    uint64_t flags);
 int fi_poll_del(struct fid_poll *pollset, struct fid *event_fid,
-
- uint64_t flags);
-
+    uint64_t flags);
 int fi_poll(struct fid_poll *pollset, void **context, int count);
-
 ```
 
 Applications call fi_poll_open() to allocate a poll set. The attribute structure is a placeholder for future extensions and contains a single flags field, which is reserved. To add and remove event queues, completion queues, and counters, the fi_poll_add() and fi_poll_del() calls are used. As with open, the flags parameter is for extensibility and should be 0. Once objects have been associated with the poll set, an app may call fi_poll() to retrieve a list of objects that may have new events available.
 
 ```
-
 struct my_cq *tx_cq, *rx_cq; /* embeds fid_cq, configured separately */
-
 struct fid_poll *pollset;
-
 struct fi_poll_attr attr = {};
-
 void *cq_context;
 
-
-
 /* Allocate and add CQs to poll set */
-
 fi_poll_open(domain, &attr, &pollset);
-
 fi_poll_add(pollset, &tx_cq->cq.fid, 0);
-
 fi_poll_add(pollset, &rx_cq->cq.fid, 0);
 
-
-
 /* Check for events */
-
 ret = fi_poll(pollset, &cq_context, 1);
-
 if (ret == 1) {
-
- /* CQ had an event */
-
- struct my_cq *cq = cq_context;
-
- struct fi_cq_msg_entry entry;
-
- fi_cq_read(&cq->cq, &entry, 1);
-
+    /* CQ had an event */
+    struct my_cq *cq = cq_context;
+    struct fi_cq_msg_entry entry;
+    fi_cq_read(&cq->cq, &entry, 1);
 }
 
 ```
@@ -1580,21 +1552,13 @@ One reason this can occur is if an entry is added to the completion queue, but t
 The wait set API is smaller than the poll set.
 
 ```
-
 int fi_wait_open(struct fid_fabric *fabric, struct fi_wait_attr *attr,
-
- struct fid_wait **waitset);
-
+    struct fid_wait **waitset);
 int fi_wait(struct fid_wait *waitset, int timeout);
 
-
-
 struct fi_wait_attr {
-
- enum fi_wait_obj wait_obj;
-
- uint64_t flags;
-
+    enum fi_wait_obj wait_obj;
+    uint64_t flags;
 };
 
 ```
@@ -1617,59 +1581,29 @@ Libfabric separates the wait object from the queues. For applications that use l
 
 Applications that want to use native wait objects (e.g. file descriptors) directly in operating system calls must perform an additional step in their processing. In order to handle race conditions that can occur between inserting an event into a completion or event object and signaling the corresponding wait object, libfabric defines a ‘trywait’ function. The fi_trywait implementation is responsible for handling potential race conditions which could result in an application either losing events or hanging. The following example demonstrates the use of fi_trywait.
 
-
-
 ```
-
 /* Get the native wait object -- an fd in this case */
-
 fi_control(&cq->fid, FI_GETWAIT, (void *) &fd);
-
 FD_ZERO(&fds);
-
 FD_SET(fd, &fds);
 
-
-
 while (1) {
-
- ret = fi_trywait(fabric, &cq->fid, 1);
-
- if (ret == FI_SUCCESS) {
-
- /* It’s safe to block on the fd */
-
- select(fd + 1, &fds, NULL, &fds, &timeout);
-
- } else if (ret == -FI_EAGAIN) {
-
- /* Read and process all completions from the CQ */
-
- do {
-
- ret = fi_cq_read(cq, &comp, 1);
-
- } while (ret > 0);
-
- } else {
-
- /* something really bad happened */
-
- }
-
+    ret = fi_trywait(fabric, &cq->fid, 1);
+    if (ret == FI_SUCCESS) {
+        /* It’s safe to block on the fd */
+        select(fd + 1, &fds, NULL, &fds, &timeout);
+    } else if (ret == -FI_EAGAIN) {
+        /* Read and process all completions from the CQ */
+        do {
+            ret = fi_cq_read(cq, &comp, 1);
+        } while (ret > 0);
+    } else {
+        /* something really bad happened */
+    }
 }
-
 ```
 
-In this example, the application has allocated a CQ with an fd as its wait object. It calls select() on the fd. Before calling select(), the application must call fi_trywait() successfully (return code of FI_SUCCESS). Success indicates that a blocking operation can now be invoked on the native wait object without fear of the application hanging or events being lost. If fi_trywait() returns –FI_EAGAIN, it usually indicates that there are queued events to process.
-
-
-
-# Wait and Poll Sets
-## Blocking on events
-### TryWait
-### Wait
-## Efficiently Checking Multiple Queues
+In this example, the application has allocated a CQ with an fd as its wait object. It calls select() on the fd. Before calling select(), the application must call fi_trywait() successfully (return code of FI_SUCCESS). Success indicates that a blocking operation can now be invoked on the native wait object without fear of the application hanging or events being lost. If fi_trywait() returns –FI_EAGAIN, it usually indicates that there are queued events to process
 
 # Putting It All Together
 ## MSG EP pingpong
