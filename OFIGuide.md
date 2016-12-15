@@ -1302,19 +1302,19 @@ Applications that need to wait on other resources, such as open file handles or 
 
 ### Reading Completions
 
-Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
+Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The CQ interfaces are optimized for batch completion processing, allowing the application to retrieve multiple completions from a single read call.  The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
 
-FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE. 
+FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE.
 
 ### Retrieving Errors
 
 Because the selected completion structure is insufficient to report all data necessary to debug or handle an operation that completes in error, failed operations are reported using a separate fi_cq_readerr() function.  This call takes as input a CQ error entry structure, which allows the provider to report more information regarding the reason for the failure.
 
-
 ```
-
+/* read error prototype */
 fi_cq_readerr(struct fid_cq *cq, struct fi_cq_err_entry *buf, uint64_t flags);
 
+/* error data structure */
 struct fi_cq_err_entry {
     void      *op_context;
     uint64_t  flags;
@@ -1327,26 +1327,283 @@ struct fi_cq_err_entry {
     int       prov_errno;
     void     *err_data;
 };
+
+/* Sample error handling */
+struct fi_cq_msg_entry entry;
+struct fi_cq_err_entry err_entry;
+int ret;
+
+ret = fi_cq_read(cq, &entry, 1);
+if (ret == -FI_EAVAIL)
+    ret = fi_cq_readerr(cq, &err_entry, 0);
 ```
 
 A fabric error code regarding the failure is reported as the err field.  A provider specific error code is also available through the prov_errno field.  This field can be decoded into a displayable string using the fi_cq_strerror() routine. The err_data field is provider specific data that assists the provider in decoding the reason for the failure.
 
-
 ## Counters
-### Checking Value
-### Error Reporting
+
+Completion counters are conceptually very simple completion queues that return the number of completions that have occurred on an endpoint.  No other details about the completion is available.  Counters work well for connection-oriented applications that make use of strict completion ordering (rx/tx attribute comp_order = FI_ORDER_STRICT), or applications that need to collect a specific number of responses from peers.
+
+An endpoint has more flexibility with how many counters it can use relative to completion queues.  Different types of operations can update separate counters.  For instance, sent messages can update one counter, while RMA writes can update another.  This allows for simple, yet powerful usage models, as control message completions can be tracked independently from large data transfers.  Counters are associated with active endpoints using the fi_ep_bind() call:
+
+```
+/* Example binding a counter to an endpoint.
+ * The counter will update on completion of any transmit operation.
+ */
+fi_ep_bind(ep, cntr, FI_SEND | FI_WRITE | FI_READ);
+```
+
+Counters are defined such that they can be implemented either in hardware or in software, by layering over a hardware completion queue.  Even when implemented in software, counter use can improve performance by reducing the amount of completion data that is reported.  Additionally, providers may be able to optimize how a counter is updated, relative to an application counting the same type of events.  For example, a provider may be able to compare the head and tail pointers of a queue to determine the total number of completions that are available, allowing a single write to update a counter, rather than repeatedly incrementing a counter variable once for each completion.
+
+### Attributes
+
+Most counter attributes are a subset of the CQ attributes:
+
+```
+struct fi_cntr_attr {
+    enum fi_cntr_events  events;
+    enum fi_wait_obj     wait_obj;
+    struct fid_wait      *wait_set;
+    uint64_t             flags;
+};
+```
+
+The sole exception is the events field, which must be set to FI_CNTR_EVENTS_COMP, indicating that completion events are being counted.  (This field is defined for future extensibility).  A completion counter is updated according to the completion model that was selected by the endpoint.  For example, if an endpoint is configured to for transmit complete, the counter will not be updated until the transfer has been received by the target endpoint.
+
+### Counter Values
+
+A completion counter is actually comprised of two different values.  One represents the number of operations that complete successfully.  The other indicates the number of operations which completed in error.  Counters do not provide any additional information about the type of error, nor indicate which operation failed.  Details of errors must be retrieved from a completion queue.
+
+Reading a counter’s values is straightforward:
+
+```
+uint64_t fi_cntr_read(struct fid_cntr *cntr);
+uint64_t fi_cntr_readerr(struct fid_cntr *cntr);
+```
 
 # Address Vectors
-## Types
-## Address Formats
-## Insertion Methods
-## Sharing Addressing Data with other Processes
+
+A primary goal of address vectors is to allow applications to communicate with thousands to millions of peers while minimizing the amount of data needed to store peer addressing information. It pushes fabric specific addressing details away from the application to the provider. This allows the provider to optimize how it converts addresses into routing data, and enables data compression techniques that may be difficult for an application to achieve without being aware of low-level fabric addressing details. For example, providers may be able to algorithmically calculate addressing components, rather than storing the data locally. Additionally, providers can communicate with resource management entities or fabric manager agents to obtain quality of service or other information about the fabric, in order to improve network utilization.
+
+An equally important objective is ensuring that the resulting interfaces, particularly data transfer operations, are fast and easy to use. Conceptually, an address vector converts an endpoint address into an fi_addr_t. The fi_addr_t (fabric interface address datatype) is a 64-bit value that is used in all ‘fast-path’ operations – data transfers and completions.
+
+Address vectors are associated with domain objects. This allows providers to implement portions of an address vector, such as quality of service mappings, in hardware.
+
+## AV Attributes
+
+Address vectors are created with the following attributes. Select attribute details are discussed below:
+
+```
+struct fi_av_attr {
+    enum fi_av_type type;
+    int rx_ctx_bits;
+    size_t count;
+    size_t ep_per_node;
+    const char *name;
+    void *map_addr;
+    uint64_t flags;
+};
+```
+
+### AV Type
+
+There are two types of address vectors. The type refers to the format of the returned fi_addr_t values for addresses that are inserted into the AV. With type FI_AV_TABLE, returned addresses are simple indices, and developers may think of the AV as an array of addresses. Each address that is inserted into the AV is mapped to the index of the next free array slot. The advantage of FI_AV_TABLE is that applications can refer to peers using a simple index, eliminating an application’s need to store any addressing data. This type maps well to applications such as MPI, where a peer is referenced by rank.
+
+The second type is FI_AV_MAP. This type does not define any specific format for the fi_addr_t value. Applications that use type map are required to provide the correct fi_addr_t for a given peer when issuing a data transfer operation. The advantage of FI_AV_MAP is that a provider can use the fi_addr_t to encode the target’s address, which avoids retrieving the data from memory. As a simple example, consider a fabric that uses TCP/IPv4 based addressing. An fi_addr_t is large enough to contain the address, which allows a provider to copy the data from the fi_addr_t directly into an outgoing packet.
+
+### AV Rx Context Bits
+
+The rx_ctx_bits field is only used with scalable endpoints with named received contexts, and is best described using an example. A peer process has allocated a scalable endpoint with two receive contexts. The first receive context will be used for control message, with data messages targeting the second context. Named contexts is a feature that allows the initiator to select which context will receive a message. If the initiating application wishes to send a data message, it must indicate that the message should be steered to the second context.
+
+The rx_ctx_bits allocates a specific number of bits out of the fi_addr_t value that will be used to indicate which context a given operation will target. Applications should reserve a number of bits large enough to indicate any context at the target. For example, two bits is sufficient to target one of four different receive contexts.
+
+The function fi_rx_addr() converts a target fi_addr_t address, along with the requested receive context index, into a new fi_addr_t value that may be used to transfer data to a scalable endpoint’s receive context.
+
+```
+fi_addr_t fi_rx_addr(fi_addr_t fi_addr, int rx_index, int rx_ctx_bits);
+```
+
+This call is simply a wrapper that writes the rx_index into the space that was reserved in the fi_addr_t value.
+
+### Sharing AVs Between Processes
+
+Large scale parallel programs typically run with multiple processes allocated on each node. Because these processes communicate with the same set of peers, the addressing data needed by each process is the same. Libfabric defines a mechanism by which processes running on the same node may share their address vectors. This allows a system to maintain a single copy of addressing data, rather than one copy per process.
+
+Although libfabric does not require any implementation for how an address vector is shared, the interfaces map well to using shared memory. Address vectors which will be shared are given an application specific name. How an application selects a name that avoid conflicts with unrelated processes, or how it communicates the name with peer processes is outside the scope of libfabric.
+
+In addition to having a name, a shared AV also has a base map address -- map_addr. Use of map_addr is only important for address vectors that are of type FI_AV_MAP, and allows applications to share fi_addr_t values. From the viewpoint of the application, the map_addr is the base value for all fi_addr_t values. A common use for map_addr is for the process that creates the initial address vector to request a value from the provider, exchange the returned map_addr with its peers, and for the peers to open the shared AV using the same map_addr. This allows the fi_addr_t values to be stored in shared memory that is accessible by all peers.
+
+# Address Vectors
+
+A primary goal of address vectors is to allow applications to communicate with thousands to millions of peers while minimizing the amount of data needed to store peer addressing information. It pushes fabric specific addressing details away from the application to the provider. This allows the provider to optimize how it converts addresses into routing data, and enables data compression techniques that may be difficult for an application to achieve without being aware of low-level fabric addressing details. For example, providers may be able to algorithmically calculate addressing components, rather than storing the data locally. Additionally, providers can communicate with resource management entities or fabric manager agents to obtain quality of service or other information about the fabric, in order to improve network utilization.
+
+An equally important objective is ensuring that the resulting interfaces, particularly data transfer operations, are fast and easy to use. Conceptually, an address vector converts an endpoint address into an fi_addr_t. The fi_addr_t (fabric interface address datatype) is a 64-bit value that is used in all ‘fast-path’ operations – data transfers and completions.
+
+Address vectors are associated with domain objects. This allows providers to implement portions of an address vector, such as quality of service mappings, in hardware.
+
+## AV Attributes
+
+Address vectors are created with the following attributes. Select attribute details are discussed below:
+
+```
+
+ struct fi_av_attr {
+
+ enum fi_av_type type;
+
+ int rx_ctx_bits;
+
+ size_t count;
+
+ size_t ep_per_node;
+
+ const char *name;
+
+ void *map_addr;
+
+ uint64_t flags;
+
+};
+
+```
+
+### AV Type
+
+There are two types of address vectors. The type refers to the format of the returned fi_addr_t values for addresses that are inserted into the AV. With type FI_AV_TABLE, returned addresses are simple indices, and developers may think of the AV as an array of addresses. Each address that is inserted into the AV is mapped to the index of the next free array slot. The advantage of FI_AV_TABLE is that applications can refer to peers using a simple index, eliminating an application’s need to store any addressing data. This type maps well to applications such as MPI, where a peer is referenced by rank.
+
+The second type is FI_AV_MAP. This type does not define any specific format for the fi_addr_t value. Applications that use type map are required to provide the correct fi_addr_t for a given peer when issuing a data transfer operation. The advantage of FI_AV_MAP is that a provider can use the fi_addr_t to encode the target’s address, which avoids retrieving the data from memory. As a simple example, consider a fabric that uses TCP/IPv4 based addressing. An fi_addr_t is large enough to contain the address, which allows a provider to copy the data from the fi_addr_t directly into an outgoing packet.
+
+### AV Rx Context Bits
+
+The rx_ctx_bits field is only used with scalable endpoints with named received contexts, and is best described using an example. A peer process has allocated a scalable endpoint with two receive contexts. The first receive context will be used for control message, with data messages targeting the second context. Named contexts is a feature that allows the initiator to select which context will receive a message. If the initiating application wishes to send a data message, it must indicate that the message should be steered to the second context.
+
+The rx_ctx_bits allocates a specific number of bits out of the fi_addr_t value that will be used to indicate which context a given operation will target. Applications should reserve a number of bits large enough to indicate any context at the target. For example, two bits is sufficient to target one of four different receive contexts.
+
+The function fi_rx_addr() converts a target fi_addr_t address, along with the requested receive context index, into a new fi_addr_t value that may be used to transfer data to a scalable endpoint’s receive context.
+
+```
+
+fi_addr_t fi_rx_addr(fi_addr_t fi_addr, int rx_index, int rx_ctx_bits);
+
+```
+
+This call is simply a wrapper that writes the rx_index into the space that was reserved in the fi_addr_t value.
+
+### Sharing AVs Between Processes
+
+Large scale parallel programs typically run with multiple processes allocated on each node. Because these processes communicate with the same set of peers, the addressing data needed by each process is the same. Libfabric defines a mechanism by which processes running on the same node may share their address vectors. This allows a system to maintain a single copy of addressing data, rather than one copy per process.
+
+Although libfabric does not require any implementation for how an address vector is shared, the interfaces map well to using shared memory. Address vectors which will be shared are given an application specific name. How an application selects a name that avoid conflicts with unrelated processes, or how it communicates the name with peer processes is outside the scope of libfabric.
+
+In addition to having a name, a shared AV also has a base map address -- map_addr. Use of map_addr is only important for address vectors that are of type FI_AV_MAP, and allows applications to share fi_addr_t values. From the viewpoint of the application, the map_addr is the base value for all fi_addr_t values. A common use for map_addr is for the process that creates the initial address vector to request a value from the provider, exchange the returned map_addr with its peers, and for the peers to open the shared AV using the same map_addr. This allows the fi_addr_t values to be stored in shared memory that is accessible by all peers.
 
 # Wait and Poll Sets
-## Blocking on events
-### TryWait
-### Wait
-## Efficiently Checking Multiple Queues
+
+As mentioned, most libfabric operations involve asynchronous processing, with completions reported to event queues, completion queues, and counters. Wait sets and poll sets were created to help manage and optimize checking for completed requests across multiple objects.
+
+A poll set is a collection of event queues, completion queues, and counters. Applications use a poll set to check if a new completion event has arrived on any of its associated objects. When events occur infrequently or to one of several completion reporting objects, using a poll set can improve application efficiency by reducing the number of calls that the application makes into the libfabric provider. The use of a poll set should be considered by apps that use at least two completion reporting structure, and it is likely that checking them will find that no new events have occurred.
+
+A wait set is similar to a poll set, and is often be used in conjunction with one. In ideal implementations, a wait set is associated with a single wait object, such as a file descriptor. All event / completion queues and counters associated with the wait set will be configured to signal that wait object when an event occurs. This minimizes the system resources that are necessary to support applications waiting for events.
+
+## Poll Set
+
+The poll set API is fairly straightforward.
+
+```
+int fi_poll_open(struct fid_domain *domain, struct fi_poll_attr *attr,
+    struct fid_poll **pollset);
+int fi_poll_add(struct fid_poll *pollset, struct fid *event_fid,
+    uint64_t flags);
+int fi_poll_del(struct fid_poll *pollset, struct fid *event_fid,
+    uint64_t flags);
+int fi_poll(struct fid_poll *pollset, void **context, int count);
+```
+
+Applications call fi_poll_open() to allocate a poll set. The attribute structure is a placeholder for future extensions and contains a single flags field, which is reserved. To add and remove event queues, completion queues, and counters, the fi_poll_add() and fi_poll_del() calls are used. As with open, the flags parameter is for extensibility and should be 0. Once objects have been associated with the poll set, an app may call fi_poll() to retrieve a list of objects that may have new events available.
+
+```
+struct my_cq *tx_cq, *rx_cq; /* embeds fid_cq, configured separately */
+struct fid_poll *pollset;
+struct fi_poll_attr attr = {};
+void *cq_context;
+
+/* Allocate and add CQs to poll set */
+fi_poll_open(domain, &attr, &pollset);
+fi_poll_add(pollset, &tx_cq->cq.fid, 0);
+fi_poll_add(pollset, &rx_cq->cq.fid, 0);
+
+/* Check for events */
+ret = fi_poll(pollset, &cq_context, 1);
+if (ret == 1) {
+    /* CQ had an event */
+    struct my_cq *cq = cq_context;
+    struct fi_cq_msg_entry entry;
+    fi_cq_read(&cq->cq, &entry, 1);
+}
+
+```
+
+It’s worth noting that fi_poll() returns a list of objects that have experienced some level of activity since they were last checked. However, an object appearing in the poll output does not guarantee that an event is actually available. For example, fi_poll() may return the context associated with a completion queue, but an app may find that queue empty when reading it. This behavior is permissible by the API and is the result of potential provider implementation details.
+
+One reason this can occur is if an entry is added to the completion queue, but that entry should not be reported to the application. For example, the completion may correspond to a message sent or received as part the provider’s protocol, and may not correspond to an application operation. The fi_poll() routine simply reports whether the queue is empty or not, and is not intended for event processing, which is deferred until the queue can be read in order to avoid additional software queuing overhead.
+
+## Wait Sets
+
+The wait set API is smaller than the poll set.
+
+```
+int fi_wait_open(struct fid_fabric *fabric, struct fi_wait_attr *attr,
+    struct fid_wait **waitset);
+int fi_wait(struct fid_wait *waitset, int timeout);
+
+struct fi_wait_attr {
+    enum fi_wait_obj wait_obj;
+    uint64_t flags;
+};
+
+```
+
+The type of wait object that the wait set should use is specified through the wait attribute structure. Unlike poll sets, a wait set is associated with event queues, completion queues, and counters during their creation. This is necessary so that system resources, such as file descriptors, can be properly allocated and configured. Applications can block until the wait set’s wait object is signaled using the fi_wait() call. Or an application can use an fi_control() call to retrieve the native wait object for use directly with system calls, such as poll() and select().
+
+A wait set is signaled whenever an event is added to one of its associated objects which would trigger the signal. In many cases, the wait set is signaled when any new event occurs; however, some objects will delay signaling the wait object until a threshold is crossed.
+
+Because wait sets are responsible for linking completion reporting objects with wait objects, they can only indicate when a wait object has been signaled. A wait set cannot identify which object was responsible for signaling the wait object. Once a wait has been satisfied, applications are responsible for checking all completion structures for events. One simple way to accomplish this is to place all objects sharing a wait set into a peer poll set.
+
+## Using Native Wait Objects: TryWait
+
+There is an important difference between using libfabric completion objects, versus sockets, that may not be obvious from the discussions so far. With sockets, the object that is signaled is the same object that abstracts the queues, namely the file descriptor. When data is received on a socket, that data is placed in a queue associated directly with the fd. Reading from the fd retrieves that data. If an application wishes to block until data arrives on a socket, it calls select() or poll() on the fd. The fd is signaled when a message is received, which releases the blocked thread, allowing it to read the fd.
+
+By associating the wait object with the underlying data queue, applications are exposed to an interface that is easy to use and race free. If data is available to read from the socket at the time select() or poll() is called, those calls simply return that the fd is readable.
+
+There are a couple of significant disadvantages to this approach, which have been discussed previously, but from different perspectives. The first is that every socket must be associated with its own fd. There is no way to share a wait object among multiple sockets. (This is a main reason for the development of epoll semantics.) The second is that the queue is maintained in the kernel, so that the select() and poll() calls can check them.
+
+Libfabric separates the wait object from the queues. For applications that use libfabric interfaces to wait for events, such as fi_cq_sread and fi_wait, this separation is mostly hidden from the application. The exception is that applications may receive a signal (e.g. fi_wait() returns success), but no events are retrieved when a queue is read.
+
+Applications that want to use native wait objects (e.g. file descriptors) directly in operating system calls must perform an additional step in their processing. In order to handle race conditions that can occur between inserting an event into a completion or event object and signaling the corresponding wait object, libfabric defines a ‘trywait’ function. The fi_trywait implementation is responsible for handling potential race conditions which could result in an application either losing events or hanging. The following example demonstrates the use of fi_trywait.
+
+```
+/* Get the native wait object -- an fd in this case */
+fi_control(&cq->fid, FI_GETWAIT, (void *) &fd);
+FD_ZERO(&fds);
+FD_SET(fd, &fds);
+
+while (1) {
+    ret = fi_trywait(fabric, &cq->fid, 1);
+    if (ret == FI_SUCCESS) {
+        /* It’s safe to block on the fd */
+        select(fd + 1, &fds, NULL, &fds, &timeout);
+    } else if (ret == -FI_EAGAIN) {
+        /* Read and process all completions from the CQ */
+        do {
+            ret = fi_cq_read(cq, &comp, 1);
+        } while (ret > 0);
+    } else {
+        /* something really bad happened */
+    }
+}
+```
+
+In this example, the application has allocated a CQ with an fd as its wait object. It calls select() on the fd. Before calling select(), the application must call fi_trywait() successfully (return code of FI_SUCCESS). Success indicates that a blocking operation can now be invoked on the native wait object without fear of the application hanging or events being lost. If fi_trywait() returns –FI_EAGAIN, it usually indicates that there are queued events to process
 
 # Putting It All Together
 ## MSG EP pingpong
