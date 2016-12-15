@@ -1302,9 +1302,9 @@ Applications that need to wait on other resources, such as open file handles or 
 
 ### Reading Completions
 
-Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
+Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The CQ interfaces are optimized for batch completion processing, allowing the application to retrieve multiple completions from a single read call.  The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
 
-FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE. 
+FI_SOURCE requires that the provider use the source address available in the raw completion data to retrieve the matching entry in the endpoint’s address vector. Applications that carry source address information as part of their data packets can avoid the overhead associated with using FI_SOURCE.
 
 ### Retrieving Errors
 
