@@ -44,7 +44,7 @@ fcntl(listen_fd, F_SETFL, O_NONBLOCK);
 listen(listen_fd, 128);
 ```
 
-In this example, the server will listen for connection requests on port 7471 across all addresses in the system.  The call to getaddrinfo() is used to form the local socket address.  The node parameter is set to NULL, which result in a wildcard IP address being returned.  The port is hard-coded to 7471.  The AI_PASSIVE flag signifies that the address will be used by the listening side of the connection.
+In this example, the server will listen for connection requests on port 7471 across all addresses in the system.  The call to getaddrinfo() is used to form the local socket address.  The node parameter is set to NULL, which result in a wild card IP address being returned.  The port is hard-coded to 7471.  The AI_PASSIVE flag signifies that the address will be used by the listening side of the connection.
 
 This example will work with both IPv4 and IPv6.  The getaddrinfo() call abstracts the address format away from the server, improving its portability.  Using the data returned by getaddrinfo(), the server allocates a socket of type SOCK_STREAM, and binds the socket to port 7471.
 
@@ -151,7 +151,7 @@ for (offset = 0; offset < size; ) {
 
 The flow for receiving data is similar to that used to send it.  Because of the streaming nature of the socket, there is no guarantee that the receiver will obtain all of the available data as part of a single call.  The server instead must wait until the socket is ready to receive data (POLLIN), before calling receive to obtain what data is available.  In this example, the server knows to expect exactly 4 KB of data from the client.
 
-It is worth noting that the previoustwo  examples are written so that they are simple to undertsand.  They are poorly constructed when considering performance.  In both cases, the application always preceeds a data transfer call (send or recv) with poll().  The impact is even if the network is ready to transfer data or has data queued for receiving, the application will always experience the latency and processing overhead of poll().  A better approach is to call send() or recv() prior to entering the for() loops, and only enter the loops if needed.
+It is worth noting that the previous two  examples are written so that they are simple to understand.  They are poorly constructed when considering performance.  In both cases, the application always precedes a data transfer call (send or recv) with poll().  The impact is even if the network is ready to transfer data or has data queued for receiving, the application will always experience the latency and processing overhead of poll().  A better approach is to call send() or recv() prior to entering the for() loops, and only enter the loops if needed.
 
 ## Connection-less (UDP) Communication
 
@@ -167,13 +167,13 @@ The second key advantage is that it is relatively easy to program to.  The impor
 
 When considering the problems with the socket API, we limit our discussion to the two most common sockets types: streaming (TCP) and datagram (UDP).
 
-Most applications require that network data be sent reliably.  This invariably means using a connection-oriented TCP socket.  TCP sockets transfer data as a stream of bytes.  However, many applications operate on messages.  The result is that applications often insert headers that are simply used to convert to/from a byte stream.  These headers consume additional network bandwidth and processing.  The streaming nature of the interface also results in the application using loops as shown in the examples above to send and receive larger messsages.  The complexity of those loops can be significant if the application is managing sockets to hundreds or thousands of peers.
+Most applications require that network data be sent reliably.  This invariably means using a connection-oriented TCP socket.  TCP sockets transfer data as a stream of bytes.  However, many applications operate on messages.  The result is that applications often insert headers that are simply used to convert to/from a byte stream.  These headers consume additional network bandwidth and processing.  The streaming nature of the interface also results in the application using loops as shown in the examples above to send and receive larger messages.  The complexity of those loops can be significant if the application is managing sockets to hundreds or thousands of peers.
 
 Another issue highlighted by the above examples deals with the asynchronous nature of network traffic.  When using a reliable transport, it is not enough to place an application's data onto the network.  If the network is busy, it could drop the packet, or the data could become corrupted during a transfer.  The data must be kept until it has been acknowledged by the peer, so that it can be resent if needed.  The socket API is defined such that the application owns the contents of its memory buffers after a socket call returns.
 
-As an example, if we examine the socket send() call, once send() returns the application is free to modify its buffer.  The network implementation has a couple of options.  One option is for the send call to place the data directly onto the network.  The call must then block before returning to the user until the peer acknowledges that it received the data, at which point send() can then return.  The obvious problem with this approach is that the application is blocked in the send() call until the network stack at the peer can process the data and generate an acknowledgement.  This can be a significant amount of time where the application is blocked and unable to process other work, such as responding to messages from other clients.
+As an example, if we examine the socket send() call, once send() returns the application is free to modify its buffer.  The network implementation has a couple of options.  One option is for the send call to place the data directly onto the network.  The call must then block before returning to the user until the peer acknowledges that it received the data, at which point send() can then return.  The obvious problem with this approach is that the application is blocked in the send() call until the network stack at the peer can process the data and generate an acknowledgment.  This can be a significant amount of time where the application is blocked and unable to process other work, such as responding to messages from other clients.
 
-A better option is for the send() call to copy the application's data into an internal buffer.  The data transfer is then issued out of that buffer, which allows retrying the operation in case of a failure.  The send() call in this case is not blocked, but all data that passes through the network will result in a memory copy to a local buffer, even in the absense of any errors.
+A better option is for the send() call to copy the application's data into an internal buffer.  The data transfer is then issued out of that buffer, which allows retrying the operation in case of a failure.  The send() call in this case is not blocked, but all data that passes through the network will result in a memory copy to a local buffer, even in the absence of any errors.
 
 Allowing immediate re-use of a data buffer helps keep the socket API simple.  However, such a feature can potentially have a negative impact on network performance.  For network or memory limited applications, an alternative API may be attractive.
 
@@ -185,11 +185,11 @@ By analyzing the socket API in the context of high-performance networking, we ca
 
 ## Avoiding Memory Copies
 
-The socket API implementation usually results in data copies occuring at both the sender and the receiver.  This is a trade-off between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transferring data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
+The socket API implementation usually results in data copies occurring at both the sender and the receiver.  This is a trade-off between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transferring data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
 
 To avoid a memory copy at the sender, we need to place the application data directly onto the network.  If we also want to avoid blocking the sending application, we need some way for the network layer to communicate with the application when the buffer is safe to re-use.  This would allow the buffer to be re-used in case it the data needs to be re-transmitted.  This leads us to crafting a network interface that behaves asynchronously.  The application will need to issue a request, then receive some sort of notification when the request has completed.
 
-Avoiding a memory copy at the receiver is more challenging.  When data arrives from the network, it needs to land into an available memory buffer, or it will be dropped, resulting in the sender retransmitting the data.  If we use socket recv() semantics, the only way to avoid a copy at the receiver is for the recv() to be called before the send().  Recv() would then need to block until the data has arrived.  Not only does this block the receiver, it is impractical to use outside of an application with a simple request-reply protocol.
+Avoiding a memory copy at the receiver is more challenging.  When data arrives from the network, it needs to land into an available memory buffer, or it will be dropped, resulting in the sender re-transmitting the data.  If we use socket recv() semantics, the only way to avoid a copy at the receiver is for the recv() to be called before the send().  Recv() would then need to block until the data has arrived.  Not only does this block the receiver, it is impractical to use outside of an application with a simple request-reply protocol.
 
 Instead, what is needed is a way for the receiving application to provide one or more buffers to the network for received data to land.  The network then needs to notify the application when data is available.  This sort of mechanism works well if the receiver does not care where in its memory space the data is located; it only needs to be able to process the incoming message.
 
@@ -205,7 +205,7 @@ Note that even though we want the application to own the network buffers, we wou
 
 ### Resource Management
 
-We define resource management to mean properly allocating network resources in order to avoid overrunning data buffers or queues.  Flow control is a common aspect of resource management.  Without proper flow control, a sender can overrun a slow or busy receiver.  This can result in dropped packets, retransmissions, and increased network congestion.  Significant research and development has gone into implementating flow control algorithms.  Because of its complexity, it is not something that an application developer should need to deal with.  That said, there are some applications where flow control simply falls out of the network protocol.  For example, a request-reply protocol naturally has flow control built in.
+We define resource management to mean properly allocating network resources in order to avoid overrunning data buffers or queues.  Flow control is a common aspect of resource management.  Without proper flow control, a sender can overrun a slow or busy receiver.  This can result in dropped packets, re-transmissions, and increased network congestion.  Significant research and development has gone into implementing flow control algorithms.  Because of its complexity, it is not something that an application developer should need to deal with.  That said, there are some applications where flow control simply falls out of the network protocol.  For example, a request-reply protocol naturally has flow control built in.
 
 For our purposes, we expand the definition of resource management beyond flow control.  Flow control typically only deals with available network buffering at a peer.  We also want to be concerned about having available space in outbound data transfer queues.  That is, as we issue commands to the local NIC to send data, that those commands can be queued at the NIC.  When we consider reliability, this means tracking outstanding requests until they have been acknowledged.  Resource management will need to ensure that we do not overflow that request queue.
 
@@ -221,7 +221,7 @@ An alternative mechanism for supporting asynchronous operations is to write even
 
 ### Interrupts and Signals
 
-Interrupts are a natural extension to supporting asynchronous operations.  However, when dealing with an asynchronous API, they can negatively impact performnace.  Interrupts, even when directed to a kernel agent, can interfere with application processing.
+Interrupts are a natural extension to supporting asynchronous operations.  However, when dealing with an asynchronous API, they can negatively impact performance.  Interrupts, even when directed to a kernel agent, can interfere with application processing.
 
 If an application has an asynchronous interface with completed operations written into a completion queue, it is often sufficient for the application to simply check the queue for events.  As long as the application has other work to perform, there is no need for it to block.  This alleviates the need for interrupt generation.  A NIC merely needs to write an entry into the completion queue and update a tail pointer to signal that a request is done.
 
@@ -233,7 +233,7 @@ As outlined above, there are performance advantages to having an API that report
 
 ## Direct Hardware Access
 
-When discussing the network layer, most software implementations refer to kernel modules responsible for implementing the necessary transport and network protocols.  However, if we want network latencies to approach sub-microsecond speeds, then we need to remove as much software between the application and its access to the hardware as possible.  One way to do this is for the application to have direct access to the network interface controller's command queues.  Similarly, the NIC requires direct access to the application's data buffers and control structures, such as the above mentioned completion queues.
+When discussing the network layer, most software implementations refer to kernel modules responsible for implementing the necessary transport and network protocols.  However, if we want network latency to approach sub-microsecond speeds, then we need to remove as much software between the application and its access to the hardware as possible.  One way to do this is for the application to have direct access to the network interface controller's command queues.  Similarly, the NIC requires direct access to the application's data buffers and control structures, such as the above mentioned completion queues.
 
 Note that when we speak about an application having direct access to network hardware, we're referring to the application process.  Naturally, an application developer is highly unlikely to code for a specific hardware NIC.  That work would be left to some sort of network library specifically targeting the NIC.  The actual network layer, which implements the network transport, could be part of the network library or offloaded onto the NIC's hardware or firmware.
 
@@ -309,7 +309,7 @@ for (i = 0; i < iovcnt; i++) {
 
 In order to process the iovec array, the natural software construct would be to use a loop to iterate over the entries.  Loops result in additional processing.  Typically, a loop requires initializing a loop control variable (e.g. i = 0), adds ALU operations (e.g. i++), and a comparison (e.g. i < iovcnt).  This overhead is necessary to handle an arbitrary number of iovec entries.  If the common case is that the application wants to send a single data buffer, write() is a better option.
 
-In addition to control loops, an API can result in the implementation needing branches.  Branches can change the execution flow of a program, impacting processor pipelining techniques.  Processor branch prediction helps alleviate this issue.  However, while branch prediction can be correct nearly 100% of the time while running a micro-benchmark, such as a network bandwidth or latency test, with more realistic network traffic, the impact can become measurable.
+In addition to control loops, an API can result in the implementation needing branches.  Branches can change the execution flow of a program, impacting processor pipe-lining techniques.  Processor branch prediction helps alleviate this issue.  However, while branch prediction can be correct nearly 100% of the time while running a micro-benchmark, such as a network bandwidth or latency test, with more realistic network traffic, the impact can become measurable.
 
 We can easily see how an API can introduce branches into the code flow if we examine the send() call.  Send() takes an extra flags parameter over the write() call.  This allows the application to modify the behavior of send().  From the viewpoint of implementing send(), the flags parameter must be checked.  In the best case, this adds one additional check (flags are non-zero).  In the worst case, every valid flag may need a separate check, resulting in potentially dozens of checks.
 
@@ -412,11 +412,11 @@ The opposite of a shared command queue are endpoints that have multiple queues. 
 
 ## Progress Model Considerations
 
-One aspect of the sockets programming interface that developers often don't consider is the location of the protocol implementation.  This is usually managed by the operating system kernel.  The network stack is responsible for handling flow control messages, timing out transfers, retransmitting unacknowledged transfers, processing received data, and sending acknowledgments.  This processing requires that the network stack consume CPU cycles.  Portions of that processing can be done within the context of the application thread, but much must be handled by kernel threads dedicated to network processing.
+One aspect of the sockets programming interface that developers often don't consider is the location of the protocol implementation.  This is usually managed by the operating system kernel.  The network stack is responsible for handling flow control messages, timing out transfers, re-transmitting unacknowledged transfers, processing received data, and sending acknowledgments.  This processing requires that the network stack consume CPU cycles.  Portions of that processing can be done within the context of the application thread, but much must be handled by kernel threads dedicated to network processing.
 
-By moving the network processing directly into the application process, we need to be concerned with how network communication makes forward progress.  For example, how and when are acknowledgements sent?  How are timeouts and message retransmissions handled?  The progress model defines this behavior, and it depends on how much of the network processing has been offloaded onto the NIC.
+By moving the network processing directly into the application process, we need to be concerned with how network communication makes forward progress.  For example, how and when are acknowledgments sent?  How are timeouts and message re-transmissions handled?  The progress model defines this behavior, and it depends on how much of the network processing has been offloaded onto the NIC.
 
-More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application thread(s).  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgements, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.1`
+More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application thread(s).  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgments, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.1`
 
 ## Ordering
 
@@ -444,7 +444,7 @@ Enforcing data ordering between messages requires that the messages themselves b
 
 ### Completions
 
-Completion ordering refers to the sequence that asynchronous operations report their completion to the application.  Typically, unreliable data transfer will naturally complete in the order that they are submitted to a transmit queue.  Each operation is transmitted to the network, with the completion occuring immediately after.  For reliable data transfers, an operation cannot complete until it has been acknowledged by the peer.  Since ack packets can be lost or possibly take different paths through the network, operations can be marked as completed out of order.  Out of order acks is more likely if messages can be processed out of order.
+Completion ordering refers to the sequence that asynchronous operations report their completion to the application.  Typically, unreliable data transfer will naturally complete in the order that they are submitted to a transmit queue.  Each operation is transmitted to the network, with the completion occurring immediately after.  For reliable data transfers, an operation cannot complete until it has been acknowledged by the peer.  Since ack packets can be lost or possibly take different paths through the network, operations can be marked as completed out of order.  Out of order acks is more likely if messages can be processed out of order.
 
 Asynchronous interfaces require that the application track their outstanding requests.  Handling out of order completions can increase application complexity, but it does allow for optimizing network utilization.
 
@@ -458,13 +458,13 @@ The following diagram highlights the general architecture of the interfaces expo
 
 ## Framework versus Provider
 
-OFI is divided into two separate components. The main component is the OFI framework, which defines the interfaces that applications use. The OFI frameworks provides some generic services; however, the bulk of the OFI implementation resides in the providers. Providers plug into the framework and supply access to fabric hardware and services. Providers are often associated with a specific hardware device or NIC. Because of the structure of the OFI framework, applications access the provider implementation directly for most operations, in order to ensure the lowest possible software latencies.
+OFI is divided into two separate components. The main component is the OFI framework, which defines the interfaces that applications use. The OFI frameworks provides some generic services; however, the bulk of the OFI implementation resides in the providers. Providers plug into the framework and supply access to fabric hardware and services. Providers are often associated with a specific hardware device or NIC. Because of the structure of the OFI framework, applications access the provider implementation directly for most operations, in order to ensure the lowest possible software latency.
 
 One important provider is referred to as the sockets provider.  This provider implements the libfabric API over TCP sockets.  A primary objective of the sockets provider is to support development efforts.  Developers can write and test their code over the sockets provider on a small system, possibly even a laptop, before debugging on a larger cluster.  The sockets provider can also be used as a fallback mechanism for applications that wish to target libfabric features for high-performance networks, but which may still need to run on small clusters connected, for example, by Ethernet.
 
 The UDP provider has a similar goal, but implements a much smaller feature set than the sockets provider.  The UDP provider is implemented over UDP sockets.  It only implements those features of libfabric which would be most useful for applications wanting unreliable, unconnected communication.  The primary goal of the UDP provider is to provide a simple building block upon which the framework can construct more complex features, such as reliability.  As a result, a secondary objective of the UDP provider is to improve application scalability when restricted to using native operation system sockets.
 
-The final generic (not associated with a specific network technology) provider is often referred to as the utility provider.  The utility provider is a collection of software modules that can be used to extend the feature coverage of any provider.  For example, the utility provider layers over the UDP provider to implement connection-oriented and reliable endpoint types.  It can similarly layer over a provider that only supports connection-oriented communication to expose reliable, connectionless (aka reliable datagram) semantics.
+The final generic (not associated with a specific network technology) provider is often referred to as the utility provider.  The utility provider is a collection of software modules that can be used to extend the feature coverage of any provider.  For example, the utility provider layers over the UDP provider to implement connection-oriented and reliable endpoint types.  It can similarly layer over a provider that only supports connection-oriented communication to expose reliable, connection-less (aka reliable datagram) semantics.
 
 Other providers target specific network technologies and systems, such as InfiniBand, Cray Aries networks, or Intel Omni-Path Architecture.
 
@@ -478,9 +478,9 @@ Control services themselves are not considered performance critical.  However, t
 
 ## Communication Services
 
-Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connectionless endpoints (address vectors).
+Communication interfaces are used to setup communication between nodes. It includes calls to establish connections (connection management), as well as functionality used to address connection-less endpoints (address vectors).
 
-The best match to socket routines would be connect(), bind(), listen(), and accept().  In fact the connection management calls are modeled after those functions, but with improved support for the asynchronous nature of the calls.  For performance and scalability reasons, connectionless endpoints use a unique model, that is not based on sockets or other network interfaces.  Address vectors are discussed in detail later, but target applications needing to talk with potentially thousands to millions of peers.  For applications communicating with a handful of peers, address vectors can slightly complicate initialization for connectionless endpoints.  (Connection-oriented endpoints may be a better option for such applications).
+The best match to socket routines would be connect(), bind(), listen(), and accept().  In fact the connection management calls are modeled after those functions, but with improved support for the asynchronous nature of the calls.  For performance and scalability reasons, connection-less endpoints use a unique model, that is not based on sockets or other network interfaces.  Address vectors are discussed in detail later, but target applications needing to talk with potentially thousands to millions of peers.  For applications communicating with a handful of peers, address vectors can slightly complicate initialization for connection-less endpoints.  (Connection-oriented endpoints may be a better option for such applications).
 
 ## Completion Services
 
@@ -504,7 +504,7 @@ Atomic operations are often viewed as a type of extended RMA transfer. They perm
 
 Memory registration is the security mechanism used to grant a remote peer access to local memory buffers.  Registered memory regions associate memory buffers with permissions granted for access by fabric resources. A memory buffer must be registered before it can be used as the target of an RMA or atomic data transfer.  Memory registration supports a simple protection mechanism.  After a memory buffer has been registered, that registration request (buffer's address, buffer length, and access permission) is given a registration key.  Peers that issue RMA or atomic operations against that memory buffer must provide this key as part of their operation.  This helps protects against unintentional accesses to the region. (Memory registration can help guard against malicious access, but it is often too weak by itself to ensure system isolation.  Other, fabric specific, mechanisms protect against malicious access.  Those mechanisms are currently outside of the scope of the libfabric API.)
 
-Memory registration often plays a secondary role with high-performance networks.  In order for a NIC to read or write application memory directly, it must access the physical memory pages that back the application's address space.  Modern operating systems employ page files that swap out virtual pages from one process with the virtual pages from another.  As a result, a physical memory page may map to different virtual addresses depending on when it is accessed.  Furthermore, when a virtual page is swapped in, it may be mapped to a new physical page.  If a NIC attempts to read or write application memory without being linked into the virtual address manager, it could access the wrong data, possibly corrupting an application's memory.  Memory registration can be used to avoid this situation from occurring.  For example, registered pages can be marked such that the operating system locks the virtual to physical mapping, avoiding any possibility of the virutal page being paged out or remapped.
+Memory registration often plays a secondary role with high-performance networks.  In order for a NIC to read or write application memory directly, it must access the physical memory pages that back the application's address space.  Modern operating systems employ page files that swap out virtual pages from one process with the virtual pages from another.  As a result, a physical memory page may map to different virtual addresses depending on when it is accessed.  Furthermore, when a virtual page is swapped in, it may be mapped to a new physical page.  If a NIC attempts to read or write application memory without being linked into the virtual address manager, it could access the wrong data, possibly corrupting an application's memory.  Memory registration can be used to avoid this situation from occurring.  For example, registered pages can be marked such that the operating system locks the virtual to physical mapping, avoiding any possibility of the virtual page being paged out or remapped.
 
 # Object Model
 
@@ -556,7 +556,7 @@ Memory regions describe application’s local memory buffers. In order for fabri
 
 ## Address Vectors
 
-Address vectors are used by connectionless endpoints. They map higher level addresses, such as IP addresses, which may be more natural for an application to use, into fabric specific addresses. The use of address vectors allows providers to reduce the amount of memory required to maintain large address look-up tables, and eliminate expensive address resolution and look-up methods during data transfer operations. 
+Address vectors are used by connection-less endpoints. They map higher level addresses, such as IP addresses, which may be more natural for an application to use, into fabric specific addresses. The use of address vectors allows providers to reduce the amount of memory required to maintain large address look-up tables, and eliminate expensive address resolution and look-up methods during data transfer operations. 
 
 # Communication Model
 
@@ -574,19 +574,19 @@ The connecting peer allocates an active endpoint, which is also associated with 
 
 Upon processing the CONNREQ, the listening application will allocate an active endpoint to use with the connection. The active endpoint is bound with an event queue. Although the diagram shows the use of a separate event queue, the active endpoint may use the same event queue as used by the passive endpoint. Accept is called on the active endpoint to finish forming the connection. It should be noted that the OFI accept call is different than the accept call used by sockets. The differences result from OFI supporting process direct I/O.
 
-OFI does not define the connection establishment protocol, but does support a traditional three-way handshake used by many technologies. After calling accept, a response is sent to the connecting active endpoint. That response generates a CONNECTED event on the remote event queue. If a three-way handshake is used, the remote endpoint will generate an acknowledgement message that will generate a CONNECTED event for the accepting endpoint. Regardless of the connection protocol, both the active and passive sides of the connection will receive a CONNECTED event that signals that the connection has been established.
+OFI does not define the connection establishment protocol, but does support a traditional three-way handshake used by many technologies. After calling accept, a response is sent to the connecting active endpoint. That response generates a CONNECTED event on the remote event queue. If a three-way handshake is used, the remote endpoint will generate an acknowledgment message that will generate a CONNECTED event for the accepting endpoint. Regardless of the connection protocol, both the active and passive sides of the connection will receive a CONNECTED event that signals that the connection has been established.
 
-## Connectionless Communications
+## Connection-less Communications
 
-Connectionless communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connectionless communication. Connectionless communication setup differs from UDP sockets in that it requires that the remote addresses be stored with libfabric.
+Connection-less communication allows data transfers between active endpoints without going through a connection setup process. The diagram below shows the basic components needed to setup connection-less communication. Connection-less communication setup differs from UDP sockets in that it requires that the remote addresses be stored with libfabric.
 
-![Connectionless](/assets/connectionless.PNG)
+![Connection-less](/assets/connectionless.PNG)
 
 OFI requires the addresses of peer endpoints be inserted into a local addressing table, or address vector, before data transfers can be initiated against the remote endpoint. Address vectors abstract fabric specific addressing requirements and avoid long queuing delays on data transfers when address resolution is needed. For example, IP addresses may need to be resolved into Ethernet MAC addresses. Address vectors allow this resolution to occur during application initialization time. OFI does not define how an address vector be implemented, only its conceptual model.
 
 Because address vector setup is considered a control operation, and often occurs during an application's initialization phase, they may be used both synchronously and asynchronously.  When used synchronously, calls to insert new addresses into the AV block until the resolution completes.  When an address vector is used asynchronously, it must be associated with an event queue.  With the asynchronous model, after an address has been inserted into the AV and the fabric specific details have been resolved, a completion event is generated on the event queue.  Data transfer operations against that address are then permissible on active endpoints that are associated with the address vector.
 
-All connectionless endpoints that transfer data must be associated with an address vector. 
+All connection-less endpoints that transfer data must be associated with an address vector. 
 
 # Endpoints
 
@@ -650,7 +650,7 @@ Each sent message carries a single tag value, which is used to select a receive 
 
 Tags are often used to identify virtual communication groups or roles.  For example, one tag value may be used to identify a group of systems that contain input data into a program.  A second tag value could identify the systems involved in the processing of the data.  And a third tag may identify systems responsible for gathering the output from the processing.  (This is purely a hypothetical example for illustrative purposes only).  Moreover, tags may carry additional data about the type of message being used by each group.  For example, messages could be separated based on whether the context carries control or data information.
 
-In practice, message tags are typically divided into fields.  For example, the upper 16 bits of the tag may indicate a virtual group, with the lower 16 bits identifying the message purpose.  The tag message interface in OFI is designed around this usage model.  Each sent message carries exactly one tag value, specified through the API.  At the receiver, buffers are associated with both a tag value and a mask.  The mask is applied to both the send and receive tag values (using a bitwise AND operation).  If the resulting values match, then the tags are said to match.  The received data is then placed into the matched buffer.
+In practice, message tags are typically divided into fields.  For example, the upper 16 bits of the tag may indicate a virtual group, with the lower 16 bits identifying the message purpose.  The tag message interface in OFI is designed around this usage model.  Each sent message carries exactly one tag value, specified through the API.  At the receiver, buffers are associated with both a tag value and a mask.  The mask is applied to both the send and receive tag values (using a bit-wise AND operation).  If the resulting values match, then the tags are said to match.  The received data is then placed into the matched buffer.
 
 For performance reasons, the mask is specified as 'ignore' bits. Although this is backwards from how many developers think of a mask (where the bits that are valid would be set to 1), the definition ends up mapping well with applications.  The actual operation performed when matching tags is:
 
@@ -675,9 +675,9 @@ Because RMA operations allow a peer to directly access the memory of a process, 
 
 ## Atomic operations
 
-Atomic transfers are used to read and update data located in remote memory regions in an atomic fashion. Conceptually, they are similar to local atomic operations of a similar nature (e.g. atomic increment, compare and swap, etc.).  The benfit of atomic operations is they enable offloading basic arithmetic capabilities onto a NIC.  Unlike other data transfer operations, atomics require knowledge of the format of the data being accessed.
+Atomic transfers are used to read and update data located in remote memory regions in an atomic fashion. Conceptually, they are similar to local atomic operations of a similar nature (e.g. atomic increment, compare and swap, etc.).  The benefit of atomic operations is they enable offloading basic arithmetic capabilities onto a NIC.  Unlike other data transfer operations, atomics require knowledge of the format of the data being accessed.
 
-A single atomic function may operate across an array of data, applying an atomic operation to each entry, but the atomicity of an operation is limited to a single datatype or entry.  OFI defines a wide variety of atomic operations across all common data types.  However support for a given operation is dependent on the provider implementation.
+A single atomic function may operate across an array of data, applying an atomic operation to each entry, but the atomicity of an operation is limited to a single data type or entry.  OFI defines a wide variety of atomic operations across all common data types.  However support for a given operation is dependent on the provider implementation.
 
 # Fabric Interfaces
 
@@ -737,17 +737,17 @@ struct fi_info {
 };
 ```
 
-THe fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attrubute structures are defined below.  For basic applications, modifying or accessing most attribute fields are unnecessary.  Many applications will only need to deal with a few fields of fi_info, most notably the capability (caps) and mode bits.
+The fi_info structure references several different attributes, which correspond to the different OFI objects that an application allocates.  Details of the various attribute structures are defined below.  For basic applications, modifying or accessing most attribute fields are unnecessary.  Many applications will only need to deal with a few fields of fi_info, most notably the capability (caps) and mode bits.
 
 On success, the fi_getinfo() function returns a linked list of fi_info structures. Each entry in the list will meet the conditions specified through the hints parameter. The returned entries may come from different network providers, or may differ in the returned attributes. For example, if hints does not specify a particular endpoint type, there may be an entry for each of the three endpoint types.  As a general rule, libfabric returns the list of fi_info structures in order from most desirable to least.  High-performance network providers are listed before more generic providers, such as the socket or UDP providers.
 
 ### Capabilities
 
-The fi_info caps field is used to specify the features and services that the application requires of the network.  This field is a bitmask of desired capabilities.  There are capability bits for each of the data transfer services mentioned above: FI_MSG, FI_TAGGED, FI_RMA, and FI_ATOMIC.  Applications should set each bit for each set of operations that it will use.  These bits are often the only bits set by an application.
+The fi_info caps field is used to specify the features and services that the application requires of the network.  This field is a bit-mask of desired capabilities.  There are capability bits for each of the data transfer services mentioned above: FI_MSG, FI_TAGGED, FI_RMA, and FI_ATOMIC.  Applications should set each bit for each set of operations that it will use.  These bits are often the only bits set by an application.
 
 In some cases, additional bits may be used to limit how a feature will be used.  For example, an application can use the FI_SEND or FI_RECV bits to indicate that it will only send or receive messages, respectively.  Similarly, an application that will only initiate RMA writes, can set the FI_WRITE bit, leaving FI_REMOTE_WRITE unset.  The FI_SEND and FI_RECV bits can be used to restrict the supported message and tagged operations.  By default, if FI_MSG or FI_TAGGED are set, the resulting endpoint will be enabled to both send and receive messages.  Likewise, FI_READ, FI_WRITE, FI_REMOTE_READ, FI_REMOTE_WRITE can restrict RMA and atomic operations.
 
-Capabilities are grouped into two general categories: primary and secondary. Primary capabilities must explicitly be requested by an application, and a provider must enable support for only those primary capabilities which were selected. Secondary capabilities may optionally be requested by an application. If requested, a provider must support a capability if it is asked for or fail the fi_getinfo request. A provider may optionally report non-selected secondary capabilities if doing so would not compromise performance or security.  That is, a provider may grant an application a secondary capability, whether the applciation requests it or not.
+Capabilities are grouped into two general categories: primary and secondary. Primary capabilities must explicitly be requested by an application, and a provider must enable support for only those primary capabilities which were selected. Secondary capabilities may optionally be requested by an application. If requested, a provider must support a capability if it is asked for or fail the fi_getinfo request. A provider may optionally report non-selected secondary capabilities if doing so would not compromise performance or security.  That is, a provider may grant an application a secondary capability, whether the application requests it or not.
 
 All of the capabilities discussed so far are primary.  Secondary capabilities mostly deal with features desired by highly scalable, high-performance applications.  For example, the FI_MULTI_RECV secondary capability indicates if the provider can support the multi-receive buffers feature described above.
 
@@ -964,7 +964,7 @@ OFI defines wait and poll set objects that are specifically designed to assist w
 
 RMA and atomic operations can both read and write memory that is owned by a peer process, and neither require the involvement of the target processor.  Because the memory can be modified over the network, an application must opt into exposing its memory to peers.  This is handled by the memory registration process.  Registered memory regions associate memory buffers with permissions granted for access by fabric resources. A memory buffer must be registered before it can be used as the target of a remote RMA or atomic data transfer. Additionally, a fabric provider may require that data buffers be registered before being used in local transfers.  The latter is necessary to ensure that the virtual to physical page mappings do not change.
 
-Although there are a few different attributes that apply to memory registration, OFI groups those attributes into one of two different modes (for application simiplicity).
+Although there are a few different attributes that apply to memory registration, OFI groups those attributes into one of two different modes (for application simplicity).
 
 ### Basic Memory Registration Mode
 
@@ -1012,7 +1012,7 @@ Endpoints are transport level communication portals. Opening an endpoint is triv
 
 ## Active
 
-Active endpoints may be connection-oriented or connectionless.  The data transfer interfaces – messages (fi_msg), tagged messages (fi_tagged), RMA (fi_rma), and atomics (fi_atomic) – are associated with active endpoints. In basic configurations, an active endpoint has transmit and receive queues. In general, operations that generate traffic on the fabric are posted to the transmit queue. This includes all RMA and atomic operations, along with sent messages and sent tagged messages. Operations that post buffers for receiving incoming data are submitted to the receive queue.
+Active endpoints may be connection-oriented or connection-less.  The data transfer interfaces – messages (fi_msg), tagged messages (fi_tagged), RMA (fi_rma), and atomics (fi_atomic) – are associated with active endpoints. In basic configurations, an active endpoint has transmit and receive queues. In general, operations that generate traffic on the fabric are posted to the transmit queue. This includes all RMA and atomic operations, along with sent messages and sent tagged messages. Operations that post buffers for receiving incoming data are submitted to the receive queue.
 
 Active endpoints are created in the disabled state. They must transition into an enabled state before accepting data transfer operations, including posting of receive buffers. The fi_enable call is used to transition an active endpoint into an enabled state. The fi_connect and fi_accept calls will also transition an endpoint into the enabled state, if it is not already enabled.  An endpoint may immediately be allocated after opening a domain, using the same fi_info structure that was returned from fi_getinfo().
 
@@ -1121,7 +1121,7 @@ The above fields indicates the maximum number of transmit and receive contexts, 
 ```
 /* Set the required number of transmit of receive contexts
  * These must be <= the domain maximums listed above.
- * This will usually be set prior to caling fi_getinfo
+ * This will usually be set prior to calling fi_getinfo
  */
 struct fi_info *hints, *info;
 struct fid_domain *domain;
@@ -1142,7 +1142,7 @@ fi_scalable_ep(domain, info, &sep, NULL);
 
 The above example opens an endpoint with four transmit and two receive contexts.  However, a scalable endpoint only needs to be scalable in one dimension -- transmit or receive.  For example, it could use multiple transmit contexts, but only require a single receive context.  It could even use a shared context, if desired.
 
-Submitting data transfer operations to a scalable endopint is more involved.  First, if the endpoint only has a single transmit context, then all transmit operations are posted directly to the scalable endpoint, the same as if a traditional endpoint were used.  Likewise, if the endpoint only has a single receive context, then all receive operations are posted directly to the scalable endpoint.  An additional step is needed before posting operations to one of many contexts, that is, the 'scalable' portion of the endpoint.  The desired context must first be retrieved:
+Submitting data transfer operations to a scalable endpoint is more involved.  First, if the endpoint only has a single transmit context, then all transmit operations are posted directly to the scalable endpoint, the same as if a traditional endpoint were used.  Likewise, if the endpoint only has a single receive context, then all receive operations are posted directly to the scalable endpoint.  An additional step is needed before posting operations to one of many contexts, that is, the 'scalable' portion of the endpoint.  The desired context must first be retrieved:
 
 ```
 /* Retrieve the first (index 0) transmit and receive contexts */
@@ -1187,7 +1187,7 @@ struct fi_ep_attr {
 };
 ```
 
-A full description of each field is available in the libfabic man pages, with selected details listed below.
+A full description of each field is available in the libfabric man pages, with selected details listed below.
 
 ### Endpoint Type
 
@@ -1207,9 +1207,9 @@ For example, suppose that an application issues two RMA write operations to the 
 
 The max_order_xxx_size fields indicate how large a message may be while still achieving data ordering. If a field is 0, then no data ordering is guaranteed. If a field is the same as the max_msg_size, then data order is guaranteed for all messages.
 
-It is common for providers to support data ordering up to max_msg_size for back to back operations that are the same. For example, an RMA write followed by an RMA write may have data ordering regardless of the size of the data transfer (max_order_waw_size = max_msg_size). Mixed operations, such as a read followed by a write, are often more restricted. This is because RMA read operations may require acknowledgements from the _initiator_, which impacts the retransmission protocol.
+It is common for providers to support data ordering up to max_msg_size for back to back operations that are the same. For example, an RMA write followed by an RMA write may have data ordering regardless of the size of the data transfer (max_order_waw_size = max_msg_size). Mixed operations, such as a read followed by a write, are often more restricted. This is because RMA read operations may require acknowledgments from the _initiator_, which impacts the re-transmission protocol.
 
-For example, consider an RMA read followed by a write. The target will process the read request, retrieve the data, and send a reply. While that is occurring, a write is received that wants to update the same memory location accessed by the read. If the target processes the write, it will overwrite the memory used by the read. If the read response is lost, and the read is retried, the target will be unable to re-send the data. To handle this, the target either needs to: defer handling the write until it receives an acknowledgement for the read response, buffer the read response so it can be retransmitted, or indicate that data ordering is not guaranteed.
+For example, consider an RMA read followed by a write. The target will process the read request, retrieve the data, and send a reply. While that is occurring, a write is received that wants to update the same memory location accessed by the read. If the target processes the write, it will overwrite the memory used by the read. If the read response is lost, and the read is retried, the target will be unable to re-send the data. To handle this, the target either needs to: defer handling the write until it receives an acknowledgment for the read response, buffer the read response so it can be re-transmitted, or indicate that data ordering is not guaranteed.
 
 Because the read or write operation may be gigabytes in size, deferring the write may add significant latency, and buffering the read response may be impractical. The max_order_xxx_size fields indicate how large back to back operations may be with ordering still maintained. In many cases, read after write and write and read ordering may be significantly limited, but still usable for implementing specific algorithms, such as a global locking mechanism.
 
@@ -1262,7 +1262,7 @@ Transmit complete is a completion mode that provides slightly stronger guarantee
 
 A third completion mode is defined to provide guarantees beyond transmit complete. With transmit complete, an application knows that the message is no longer dependent on the local NIC or network (e.g. switches). However, the data may be buffered at the remote NIC and has not necessarily been written to the target memory. As a result, data sent in the request may not be visible to all processes. The third completion mode is delivery complete.
 
-Delivery complete indicates that the results of the operation are available to all processes on the fabric. The distinction between transmit and delivery complete is subtle, but important. It often deals with _when_ the target endpoint generates an acknowledgement to a message. For providers that offload transport protocol to the NIC, support for transmit complete is common. Delivery complete guarantees are more easily met by providers that implement portions of their protocol on the host processor. Delivery complete corresponds to the FI_DELIVERY_COMPLETE operation flag.
+Delivery complete indicates that the results of the operation are available to all processes on the fabric. The distinction between transmit and delivery complete is subtle, but important. It often deals with _when_ the target endpoint generates an acknowledgment to a message. For providers that offload transport protocol to the NIC, support for transmit complete is common. Delivery complete guarantees are more easily met by providers that implement portions of their protocol on the host processor. Delivery complete corresponds to the FI_DELIVERY_COMPLETE operation flag.
 
 Applications can request a default completion mode when opening an endpoint by setting one of the above mentioned complete flags as an op_flags for the context’s attributes. However, it is usually recommended that application use the provider’s default flags for best performance, and amend its protocol to achieve its completion semantics. For example, many applications will perform a ‘finalize’ or ‘commit’ procedure as part of their operation, which synchronizes the processing of all peers and guarantees that all previously sent data has been received.
 
@@ -1302,7 +1302,7 @@ Because CQs often map to hardware constructs, their size may be limited to a pre
 
 #### CQ Format
 
-In order to minimize the amount of data that a provider must report, the type of completion data written back to the application is selectable. This limits the number of bytes the provider writes to memory, and allows necessary completion data to fit into a compact structure. Each CQ format maps to a specific completion structure. Developers should analyze each structure, select the smallest structure that contains all of the data it requires, and specify the corresponding enum value as the CQ format.
+In order to minimize the amount of data that a provider must report, the type of completion data written back to the application is select-able. This limits the number of bytes the provider writes to memory, and allows necessary completion data to fit into a compact structure. Each CQ format maps to a specific completion structure. Developers should analyze each structure, select the smallest structure that contains all of the data it requires, and specify the corresponding enum value as the CQ format.
 
 For example, if an application only needs to know which request completed, along with the size of a received message, it can select the following:
 
@@ -1326,7 +1326,7 @@ Applications that need to wait on other resources, such as open file handles or 
 
 ### Reading Completions
 
-Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The CQ interfaces are optimized for batch completion processing, allowing the application to retrieve multiple completions from a single read call.  The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivate of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
+Completions may be read from a CQ by using one of the non-blocking calls, fi_cq_read / fi_cq_readfrom, or one of the blocking calls, fi_cq_sread / fi_cq_sreadfrom. Regardless of which call is used, applications pass in an array of completion structures based on the selected CQ format. The CQ interfaces are optimized for batch completion processing, allowing the application to retrieve multiple completions from a single read call.  The difference between the read and readfrom calls is that readfrom returns source addressing data, if available. The readfrom derivative of the calls is only useful for unconnected endpoints, and only if the corresponding endpoint has been configured with the FI_SOURCE capability.
 
 FI_SOURCE requires that the provider use the source address available in the raw completion data, such as the packet's source address, to retrieve a matching entry in the endpoint’s address vector. Applications that carry some sort of source identifier as part of their data packets can avoid the overhead associated with using FI_SOURCE.
 
