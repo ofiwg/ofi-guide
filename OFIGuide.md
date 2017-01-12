@@ -8,7 +8,7 @@ tagline: Libfabric (v1.4) Programmer's Guide
 
 # Introduction
 
-OpenFabrics Interfaces, or OFI, is a framework focused on exporting fabric communication services to applications.  OFI is specifically designed to meet the performance and scalability requirements of high-performance computing (HPC) applications, such as MPI, SHMEM, PGAS, DBMS, and enterprise applications, running in a tightly coupled network environment.  The key components are OFI are: application interfaces, provider libraries, kernel services, daemons, and test applications.
+OpenFabrics Interfaces, or OFI, is a framework focused on exporting fabric communication services to applications.  OFI is specifically designed to meet the performance and scalability requirements of high-performance computing (HPC) applications, such as MPI, SHMEM, PGAS, DBMS, and enterprise applications, running in a tightly coupled network environment.  The key components of OFI are: application interfaces, provider libraries, kernel services, daemons, and test applications.
 
 Libfabric is a core component of OFI. It is the library that defines and exports the user-space API of OFI, and is typically the only software that applications deal with directly. Libfabric is agnostic to the underlying networking protocols, as well as the implementation of the networking devices. 
 
@@ -70,7 +70,7 @@ Similar to the server, the client makes use of getaddrinfo().  Since the AI_PASS
 
 Whether the client is given the server's network address directly or a name which must be translated into the network address, the mechanism used to provide this information to the client varies widely.  A simple mechanism that is commonly used is for users to provide the server's address using a command line option.  The problem of telling applications where its peers are located increases significantly for applications that communicate with hundreds to millions of peer processes, often requiring a separate, dedicated application to solve.  For a typical client-server socket application, this is not an issue, so we will defer more discussion until later.
 
-Using the getaddrinfo() results, the client opens a socket, configures it for non-blocking mode, and initiates the connection request.  At this point, the network stack has send a request to the server to establish the connection.  Because the socket has been set to non-blocking, the connect call will return immediately and not wait for the connection to be established.  As a result any attempt to send data at this point will likely fail.
+Using the getaddrinfo() results, the client opens a socket, configures it for non-blocking mode, and initiates the connection request.  At this point, the network stack has sent a request to the server to establish the connection.  Because the socket has been set to non-blocking, the connect call will return immediately and not wait for the connection to be established.  As a result any attempt to send data at this point will likely fail.
 
 ```
 /* Example server code flow to accept a connection */
@@ -187,7 +187,7 @@ By analyzing the socket API in the context of high-performance networking, we ca
 
 The socket API implementation usually results in data copies occurring at both the sender and the receiver.  This is a trade-off between keeping the interface easy to use, versus providing reliability.  Ideally, all memory copies would be avoided when transferring data over the network.  There are techniques and APIs that can be used to avoid memory copies, but in practice, the cost of avoiding a copy can often be more than the copy itself, in particular for small transfers (measured in bytes, versus kilobytes or more).
 
-To avoid a memory copy at the sender, we need to place the application data directly onto the network.  If we also want to avoid blocking the sending application, we need some way for the network layer to communicate with the application when the buffer is safe to re-use.  This would allow the buffer to be re-used in case it the data needs to be re-transmitted.  This leads us to crafting a network interface that behaves asynchronously.  The application will need to issue a request, then receive some sort of notification when the request has completed.
+To avoid a memory copy at the sender, we need to place the application data directly onto the network.  If we also want to avoid blocking the sending application, we need some way for the network layer to communicate with the application when the buffer is safe to re-use.  This would allow the buffer to be re-used in case the data needs to be re-transmitted.  This leads us to crafting a network interface that behaves asynchronously.  The application will need to issue a request, then receive some sort of notification when the request has completed.
 
 Avoiding a memory copy at the receiver is more challenging.  When data arrives from the network, it needs to land into an available memory buffer, or it will be dropped, resulting in the sender re-transmitting the data.  If we use socket recv() semantics, the only way to avoid a copy at the receiver is for the recv() to be called before the send().  Recv() would then need to block until the data has arrived.  Not only does this block the receiver, it is impractical to use outside of an application with a simple request-reply protocol.
 
@@ -195,7 +195,7 @@ Instead, what is needed is a way for the receiving application to provide one or
 
 As an alternative, it is possible to reverse this flow, and have the network layer hand its buffer to the application.  The application would then be responsible for returning the buffer to the network layer when it is done with its processing.  While this approach can avoid memory copies, it suffers from a few drawbacks.  First, the network layer does not know what size of messages to expect, which can lead to inefficient memory use.  Second, many would consider this a more difficult programming model to use.  And finally, the network buffers would need to be mapped into the application process' memory space, which negatively impacts performance.
 
-In addition to processing messages, some applications want to receive data and store it in a specific location in memory.  For example, a database may want to merge received data records into an existing table.  In such cases, even if data arriving from the network goes directly into an application's receive buffers, it may still need to be copied into its final location.  It would be ideal if the network supporting placing data that arrives from the network into a specific memory buffer, with the buffer determined based on the contents of the data.
+In addition to processing messages, some applications want to receive data and store it in a specific location in memory.  For example, a database may want to merge received data records into an existing table.  In such cases, even if data arriving from the network goes directly into an application's receive buffers, it may still need to be copied into its final location.  It would be ideal if the network supported placing data that arrives from the network into a specific memory buffer, with the buffer determined based on the contents of the data.
 
 ### Network Buffers
 
@@ -241,11 +241,11 @@ Note that when we speak about an application having direct access to network har
 
 Kernel bypass is a feature that allows the application to avoid calling into the kernel for data transfer operations.  This is possible when it has direct access to the NIC hardware.  Complete kernel bypass is impractical because of security concerns and resource management constraints.  However, it is possible to avoid kernel calls for what are called 'fast-path' operations, such as send or receive.
 
-For security and stability reasons, operating system kernels cannot rely on data that comes from user space applications.  As a result, even a simple kernel call often requires acquiring and releasing locks, coupled with data verification checks.  If we can limit the affects of a poorly written or malicious application to its own process space, we can avoid the overhead that comes with kernel validation without impacting system stability.
+For security and stability reasons, operating system kernels cannot rely on data that comes from user space applications.  As a result, even a simple kernel call often requires acquiring and releasing locks, coupled with data verification checks.  If we can limit the effects of a poorly written or malicious application to its own process space, we can avoid the overhead that comes with kernel validation without impacting system stability.
 
 ### Direct Data Placement
 
-Direct data placement means avoiding data copies when sending and receive data, plus placing received data into the correct memory buffer where needed.  On a broader scale, it is part of having direct hardware access, with the application and NIC communicate directly with shared memory buffers and queues.
+Direct data placement means avoiding data copies when sending and receiving data, plus placing received data into the correct memory buffer where needed.  On a broader scale, it is part of having direct hardware access, with the application and NIC communicating directly with shared memory buffers and queues.
 
 Direct data placement is often thought of by those familiar with RDMA - remote direct memory access.  RDMA is a technique that allows reading and writing memory that belongs to a peer process that is running on a node across the network.  Advanced RDMA hardware is capable of accessing the target memory buffers without involving the execution of the peer process.  RDMA relies on offloading the network transport onto the NIC in order to avoid interrupting the target process.
 
@@ -331,7 +331,7 @@ As an example, a NIC needs to have the destination address as part of a send ope
 
 Memory footprint concerns are most notable among high-performance computing (HPC) applications that communicate with thousands of peers.  Excessive memory consumption impacts application scalability, limiting the number of peers that can operate in parallel to solve problems.  There is often a trade-off between minimizing the memory footprint needed for network communication, application performance, and ease of use of the network interface.
 
-As we discussed with the socket API semantics, part of the ease of using sockets comes from the network layering copying the user's buffer into an internal buffer belonging to the network stack.  The amount of internal buffering that's made available to the application directly correlates with the bandwidth that an application can achieve.  In general, larger the internal buffering increases network performance, with a cost of increasing the memory footprint consumed by the application.  This memory footprint exists independent of the amount of memory allocated directly by the application.  Eliminating network buffering not only helps with performance, but also scalability, by reducing the memory footprint needed to support the application.
+As we discussed with the socket API semantics, part of the ease of using sockets comes from the network layering copying the user's buffer into an internal buffer belonging to the network stack.  The amount of internal buffering that's made available to the application directly correlates with the bandwidth that an application can achieve.  In general, larger internal buffering increases network performance, with a cost of increasing the memory footprint consumed by the application.  This memory footprint exists independent of the amount of memory allocated directly by the application.  Eliminating network buffering not only helps with performance, but also scalability, by reducing the memory footprint needed to support the application.
 
 While network memory buffering increases as an application scales, it can often be configured to a fixed size.  The amount of buffering needed is dependent on the number of active communication streams being used at any one time.  That number is often significantly lower than the total number of peers that an application may need to communicate with.  The amount of memory required to _address_ the peers, however, usually has a linear relationship with the total number of peers.
 
@@ -356,7 +356,7 @@ The main issue with this sort of address reduction is that it is difficult to ac
 
 ## Communication Resources
 
-We need to take a brief detour in the discussion in order delve deeper into the network problem and solution space.  Instead of continuing to think of a socket as a single entity, with both send and receive capabilities, we want to consider its components separately. A network socket can be viewed as three basic constructs: a transport level address, a send or transmit queue, and a receive queue.  Because our discussion will begin to pivot away from pure socket semantics, we will refer to our network 'socket' as an endpoint.
+We need to take a brief detour in the discussion in order to delve deeper into the network problem and solution space.  Instead of continuing to think of a socket as a single entity, with both send and receive capabilities, we want to consider its components separately. A network socket can be viewed as three basic constructs: a transport level address, a send or transmit queue, and a receive queue.  Because our discussion will begin to pivot away from pure socket semantics, we will refer to our network 'socket' as an endpoint.
 
 In order to reduce an application's memory footprint, we need to consider features that fall outside of the socket API.  So far, much of the discussion has been around sending data to a peer.  We now want to focus on the best mechanisms for receiving data.
 
@@ -416,11 +416,11 @@ One aspect of the sockets programming interface that developers often don't cons
 
 By moving the network processing directly into the application process, we need to be concerned with how network communication makes forward progress.  For example, how and when are acknowledgments sent?  How are timeouts and message re-transmissions handled?  The progress model defines this behavior, and it depends on how much of the network processing has been offloaded onto the NIC.
 
-More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application thread(s).  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgments, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.1`
+More generally, progress is the ability of the underlying network implementation to complete processing of an asynchronous request.  In many cases, the processing of an asynchronous request requires the use of the host processor.  For performance reasons, it may be undesirable for the provider to allocate a thread for this purpose, which will compete with the application thread(s).  We can avoid thread context switches if the application thread can be used to make forward progress on requests -- check for acknowledgments, retry timed out operations, etc.  Doing so requires that the application periodically call into the network stack.
 
 ## Ordering
 
-Network ordering is a complex subject.  With TCP sockets, data is send and received in the same order.  Buffers are re-usable by the application immediately upon returning from a function call.  As a result, ordering is simple to understand and use.  UDP sockets complicate things slightly.  With UDP sockets, messages may be received out of order from how they were sent.  In practice, this often doesn't occur, particularly, if the application only communicates over a local area network, such as Ethernet.
+Network ordering is a complex subject.  With TCP sockets, data is sent and received in the same order.  Buffers are re-usable by the application immediately upon returning from a function call.  As a result, ordering is simple to understand and use.  UDP sockets complicate things slightly.  With UDP sockets, messages may be received out of order from how they were sent.  In practice, this often doesn't occur, particularly, if the application only communicates over a local area network, such as Ethernet.
 
 With our evolving network API, there are situations where exposing different order semantics can improve performance.  These details will be discussed further below.
 
@@ -430,7 +430,7 @@ UDP sockets allow messages to arrive out of order because each message is routed
 
 Unlike UDP sockets, however, our definition of message ordering is more subtle.  UDP messages are small, MTU sized packets.  In our case, messages may be gigabytes in size.  We define message ordering to indicate whether the start of each message is processed in order or out of order.  This is related to, but separate from the order of how the message payload is received.
 
-An example will help clarify this distinction.  Suppose that an application has posted two messages to its receive queue.  The first receive points to a 4 KB buffer.  The second receive points to a 64 KB buffer.  The sender will transmit a 4 KB message followed by a 64 KB message.  If messages are processed in order, then the 4 KB send will match with the 4 KB received, and the 64 KB send will match with the 64 KB receive.  However, if messages can be processed out of order, then the sends and receive can mismatch, resulting in the 64 KB send being truncated.
+An example will help clarify this distinction.  Suppose that an application has posted two messages to its receive queue.  The first receive points to a 4 KB buffer.  The second receive points to a 64 KB buffer.  The sender will transmit a 4 KB message followed by a 64 KB message.  If messages are processed in order, then the 4 KB send will match with the 4 KB received, and the 64 KB send will match with the 64 KB receive.  However, if messages can be processed out of order, then the sends and receives can mismatch, resulting in the 64 KB send being truncated.
 
 In this example, we're not concerned with what order the data is received in.  The 64 KB send could be broken in 64 1-KB transfers that take different routes to the destination.  So, bytes 2k-3k could be received before bytes 1k-2k.  Message ordering is not concerned with ordering _within_ a message, only _between_ messages.  With ordered messages, the messages themselves need to be processed in order.
 
@@ -458,11 +458,11 @@ The following diagram highlights the general architecture of the interfaces expo
 
 ## Framework versus Provider
 
-OFI is divided into two separate components. The main component is the OFI framework, which defines the interfaces that applications use. The OFI frameworks provides some generic services; however, the bulk of the OFI implementation resides in the providers. Providers plug into the framework and supply access to fabric hardware and services. Providers are often associated with a specific hardware device or NIC. Because of the structure of the OFI framework, applications access the provider implementation directly for most operations, in order to ensure the lowest possible software latency.
+OFI is divided into two separate components. The main component is the OFI framework, which defines the interfaces that applications use. The OFI framework provides some generic services; however, the bulk of the OFI implementation resides in the providers. Providers plug into the framework and supply access to fabric hardware and services. Providers are often associated with a specific hardware device or NIC. Because of the structure of the OFI framework, applications access the provider implementation directly for most operations, in order to ensure the lowest possible software latency.
 
 One important provider is referred to as the sockets provider.  This provider implements the libfabric API over TCP sockets.  A primary objective of the sockets provider is to support development efforts.  Developers can write and test their code over the sockets provider on a small system, possibly even a laptop, before debugging on a larger cluster.  The sockets provider can also be used as a fallback mechanism for applications that wish to target libfabric features for high-performance networks, but which may still need to run on small clusters connected, for example, by Ethernet.
 
-The UDP provider has a similar goal, but implements a much smaller feature set than the sockets provider.  The UDP provider is implemented over UDP sockets.  It only implements those features of libfabric which would be most useful for applications wanting unreliable, unconnected communication.  The primary goal of the UDP provider is to provide a simple building block upon which the framework can construct more complex features, such as reliability.  As a result, a secondary objective of the UDP provider is to improve application scalability when restricted to using native operation system sockets.
+The UDP provider has a similar goal, but implements a much smaller feature set than the sockets provider.  The UDP provider is implemented over UDP sockets.  It only implements those features of libfabric which would be most useful for applications wanting unreliable, unconnected communication.  The primary goal of the UDP provider is to provide a simple building block upon which the framework can construct more complex features, such as reliability.  As a result, a secondary objective of the UDP provider is to improve application scalability when restricted to using native operating system sockets.
 
 The final generic (not associated with a specific network technology) provider is often referred to as the utility provider.  The utility provider is a collection of software modules that can be used to extend the feature coverage of any provider.  For example, the utility provider layers over the UDP provider to implement connection-oriented and reliable endpoint types.  It can similarly layer over a provider that only supports connection-oriented communication to expose reliable, connection-less (aka reliable datagram) semantics.
 
@@ -470,7 +470,7 @@ Other providers target specific network technologies and systems, such as Infini
 
 ## Control services
 
-Control services are used by applications to discover information about the types of communication services are available in the system. For example, discovery will indicate what fabrics are reachable from the local node, and what sort of communication each provides.
+Control services are used by applications to discover information about the types of communication services available in the system. For example, discovery will indicate what fabrics are reachable from the local node, and what sort of communication each provides.
 
 In terms of implementation, control services are handled primarily by a single API, fi_getinfo().  Modeled very loosely on getaddrinfo(), it is used not just to discover what features are available in the system, but also how they might best be used by an application desiring maximum performance.
 
@@ -685,7 +685,7 @@ A full description of the libfabric API is documented in the relevant man pages.
 
 ## Using fi_getinfo
 
-The fi_getinfo() call is one of the first call that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.  It serves several purposes. First, it abstracts away network implementation and addressing details.  Second, it allows an application to specify which features they require of the network.  Last, it provides a mechanism for a provider to report how an application can use the network in order to achieve the best performance.
+The fi_getinfo() call is one of the first calls that most applications will invoke.  It is designed to be easy to use for simple applications, but extensible enough to configure a network for optimal performance.  It serves several purposes. First, it abstracts away network implementation and addressing details.  Second, it allows an application to specify which features they require of the network.  Last, it provides a mechanism for a provider to report how an application can use the network in order to achieve the best performance.
 
 ```
 /* API prototypes */
@@ -799,7 +799,7 @@ The fid structure is designed as a trade-off between minimizing memory footprint
 
 The ops field points to a set of function pointers.  The fi_ops structure defines the operations that apply to that class.  The size field in the fi_ops structure is used for extensibility, and allows the fi_ops structure to grow in a backward compatible manner as new operations are added.  The fid deliberately points to the fi_ops structure, rather than embedding the operations directly.  This allows multiple fids to point to the same set of ops, which minimizes the memory footprint of each fid. (Internally, providers usually set ops to a static data structure, with the fid structure dynamically allocated.)
 
-Although it's possible for applications to access function pointers directly.  It is strongly recommended that the static inline functions defined in the man pages be used instead.  This is required by applications that may be build using the FABRIC_DIRECT library feature.  (FABRIC_DIRECT is a compile time option that allows for highly optimized builds by tightly coupling an application with a specific provider.  See the man pages for more details.)
+Although it's possible for applications to access function pointers directly, it is strongly recommended that the static inline functions defined in the man pages be used instead.  This is required by applications that may be built using the FABRIC_DIRECT library feature.  (FABRIC_DIRECT is a compile time option that allows for highly optimized builds by tightly coupling an application with a specific provider.  See the man pages for more details.)
 
 Other OFI classes are derived from this structure, adding their own set of operations.
 
@@ -822,7 +822,7 @@ Other fid classes follow a similar pattern as that shown for fid_fabric.  The ba
 
 # Fabric
 
-The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider that the application will use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
+The top-level object that applications open is the fabric identifier.  The fabric can mostly be viewed as a container object by applications, though it does identify which provider applications use. (Future extensions are likely to expand methods that apply directly to the fabric object.  An example is adding topology data to the API.)
 
 Opening a fabric is usually a straightforward call after calling fi_getinfo().
 
@@ -1152,7 +1152,7 @@ fi_rx_context(scalable_ep, 0, info->rx_attr, &rx_ctx[0], &rx_ctx[0]);
 
 Data transfer operations are then posted to the tx_ctx or rx_ctx.  It should be noted that although the scalable endpoint, transmit context, and receive context are all of type fid_ep, attempting to submit a data transfer operation against the wrong object will result in an error.
 
-Be default all transmit and receive contexts belonging to a scalable endpoint are similar with respect to other transmit and receive contexts.  However, applications can request that a context have fewer capabilities than what was requested for the scalable endpoint.  This allows the provider to configure its hardware resources for optimal performance.  For example, suppose a scalable endpoint has been configured for tagged message and RMA support.  An application can open a transmit context with only tagged message support, and another context with only RMA support.
+By default all transmit and receive contexts belonging to a scalable endpoint are similar with respect to other transmit and receive contexts.  However, applications can request that a context have fewer capabilities than what was requested for the scalable endpoint.  This allows the provider to configure its hardware resources for optimal performance.  For example, suppose a scalable endpoint has been configured for tagged message and RMA support.  An application can open a transmit context with only tagged message support, and another context with only RMA support.
 
 ## Resource Bindings
 
@@ -1166,7 +1166,7 @@ int fi_scalable_ep_bind(struct fid_ep *sep, struct fid *fid, uint64_t flags);
 int fi_pep_bind(struct fid_pep *pep, struct fid *fid, uint64_t flags);
 ```
 
-The bind functions are similar to each other (and ma to the same fi_bind call internally).  Flags are used to indicate how the resources should be associated.  The passive endpoint section above shows an example of binding passive and active endpoints to event and completion queues.
+The bind functions are similar to each other (and map to the same fi_bind call internally).  Flags are used to indicate how the resources should be associated.  The passive endpoint section above shows an example of binding passive and active endpoints to event and completion queues.
 
 ## EP Attributes
 
@@ -1465,7 +1465,7 @@ As mentioned, most libfabric operations involve asynchronous processing, with co
 
 A poll set is a collection of event queues, completion queues, and counters. Applications use a poll set to check if a new completion event has arrived on any of its associated objects. When events occur infrequently or to one of several completion reporting objects, using a poll set can improve application efficiency by reducing the number of calls that the application makes into the libfabric provider. The use of a poll set should be considered by apps that use at least two completion reporting structures, and it is likely that checking them will find that no new events have occurred.
 
-A wait set is similar to a poll set, and is often be used in conjunction with one. In ideal implementations, a wait set is associated with a single wait object, such as a file descriptor. All event / completion queues and counters associated with the wait set will be configured to signal that wait object when an event occurs. This minimizes the system resources that are necessary to support applications waiting for events.
+A wait set is similar to a poll set, and is often used in conjunction with one. In ideal implementations, a wait set is associated with a single wait object, such as a file descriptor. All event / completion queues and counters associated with the wait set will be configured to signal that wait object when an event occurs. This minimizes the system resources that are necessary to support applications waiting for events.
 
 ## Poll Set
 
