@@ -5,6 +5,13 @@ tagline: Libfabric (v1.4) Programmer's Guide
 ---
 {% include JB/setup %}
 
+# IMPORTANT NOTE!!!
+
+This guide has been integrated into the libfabric man pages and is
+no longer maintained in this tree.  See the libfabric fi_guide.7
+man page.
+
+---
 
 # Introduction
 
